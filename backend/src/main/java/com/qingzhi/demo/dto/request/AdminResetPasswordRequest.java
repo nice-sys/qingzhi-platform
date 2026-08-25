@@ -2,30 +2,35 @@ package com.qingzhi.demo.dto.request;
 
 import com.qingzhi.demo.common.Constants;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.io.Serializable;
 
 /**
- * 修改密码请求 DTO（普通用户登录后修改自己的密码）
- * <p>对应 PRD 2.1.3 密码管理：普通用户修改自己的密码；
- * PRD 2.2.1 权限矩阵：教师(Y)、学生(Y)、管理员(本人也可使用)</p>
+ * 管理员重置用户密码请求 DTO
+ * <p>对应 PRD 2.2.1 权限矩阵：重置用户密码 仅管理员(Y)
+ * & PRD 2.2.2 管理员用户管理：包括重置用户密码</p>
  */
-public class PasswordResetRequest implements Serializable {
+public class AdminResetPasswordRequest implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     /**
-     * 旧密码（明文）
+     * 被重置密码的用户ID
      */
-    @NotBlank(message = "旧密码不能为空")
-    private String oldPassword;
+    @NotNull(message = "用户ID不能为空")
+    @Positive(message = "用户ID必须大于0")
+    private Long userId;
 
     /**
      * 新密码（明文，后端加密存储）
-     * <p>PRD 2.1.1 密码规则：>=8位，须含数字+字母</p>
+     * <p>管理员重置时仍然要求遵循新密码格式规则（>=8位且含数字+字母）</p>
      */
     @NotBlank(message = "新密码不能为空")
+    @Size(min = Constants.PASSWORD_MIN_LENGTH, message = "密码长度不能少于 " + Constants.PASSWORD_MIN_LENGTH + " 位")
     @Pattern(regexp = Constants.PASSWORD_REGEX, message = "密码格式不合法：需不少于8位且包含数字和字母")
     private String newPassword;
 
@@ -35,33 +40,26 @@ public class PasswordResetRequest implements Serializable {
     @NotBlank(message = "确认新密码不能为空")
     private String confirmNewPassword;
 
-    public PasswordResetRequest() {
+    public AdminResetPasswordRequest() {
     }
 
     /**
-     * 新密码与确认密码是否一致
+     * 两次新密码是否一致
      */
     public boolean isNewPasswordMatch() {
         return newPassword != null && newPassword.equals(confirmNewPassword);
-    }
-
-    /**
-     * 新密码与旧密码是否相同（禁止用户把新密码设为与旧密码一样）
-     */
-    public boolean isSameAsOld() {
-        return oldPassword != null && oldPassword.equals(newPassword);
     }
 
     /* ============================================================
      * Getter / Setter
      * ============================================================ */
 
-    public String getOldPassword() {
-        return oldPassword;
+    public Long getUserId() {
+        return userId;
     }
 
-    public void setOldPassword(String oldPassword) {
-        this.oldPassword = oldPassword;
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     public String getNewPassword() {

@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.qingzhi.demo.mapper.UserMapper">
+
+    <!-- ============================================================
+         字段映射（含驼峰映射表，防止 underscore->camel 失败的场景）
+         ============================================================ -->
+    <resultMap id="UserResultMap" type="com.qingzhi.demo.entity.User">
+        <id     property="id"             column="id"               />
+        <result property="username"       column="username"         />
+        <result property="password"       column="password"         />
+        <result property="name"           column="name"             />
+        <result property="phone"          column="phone"            />
+        <result property="email"          column="email"            />
+        <result property="department"     column="department"       />
+        <result property="major"          column="major"            />
+        <result property="role"           column="role"             />
+        <result property="status"         column="status"           />
+        <result property="loginFailCount" column="login_fail_count" />
+        <result property="lockTime"       column="lock_time"        />
+        <result property="createTime"     column="create_time"      />
+        <result property="updateTime"     column="update_time"      />
+    </resultMap>
+
+    <!-- 通用查询列（避免写 *） -->
+    <sql id="Base_Column_List">
+        id, username, password, name, phone, email, department, major,
+        role, status, login_fail_count, lock_time, create_time, update_time
+    </sql>
+
+    <!-- ============================================================
+         1. 根据账号查询用户（注册查重 + 登录查询共用）
+         ============================================================ -->
+    <select id="selectByUsername" resultMap="UserResultMap" parameterType="string">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM user
+        WHERE username = #{username}
+        LIMIT 1
+    </select>
+
+    <!-- ============================================================
+         2. 插入新用户（注册、批量导入共用）
+         - create_time / update_time 由数据库 DEFAULT CURRENT_TIMESTAMP 或此处赋值
+         - status 默认 0（正常），login_fail_count 默认 0
+         ============================================================ -->
+    <insert id="insert" parameterType="com.qingzhi.demo.entity.User"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="username != null">username,</if>
+            <if test="password != null">password,</if>
+            <if test="name != null">name,</if>
+            <if test="phone != null">phone,</if>
+            <if test="email != null">email,</if>
+            <if test="department != null">department,</if>
+            <if test="major != null">major,</if>
+            <if test="role != null">role,</if>
+            status,
+            login_fail_count,
+            create_time,
+            update_time
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="username != null">#{username},</if>
+            <if test="password != null">#{password},</if>
+            <if test="name != null">#{name},</if>
+            <if test="phone != null">#{phone},</if>
+            <if test="email != null">#{email},</if>
+            <if test="department != null">#{department},</if>
+            <if test="major != null">#{major},</if>
+            <if test="role != null">#{role},</if>
+            COALESCE(#{status}, 0),
+            COALESCE(#{loginFailCount}, 0),
+            COALESCE(#{createTime}, NOW()),
+            COALESCE(#{updateTime}, NOW())
+        </trim>
+    </insert>
+
+    <!-- ============================================================
+         3. 根据主键ID查询用户
+         ============================================================ -->
+    <select id="selectById" resultMap="UserResultMap" parameterType="long">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM user
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <!-- ============================================================
+         4. 更新登录失败信息（加分项：登录防暴力破解）
+         - 写入 login_fail_count、status、lock_time、update_time
+         ============================================================ -->
+    <update id="updateLoginFailInfo" parameterType="com.qingzhi.demo.entity.User">
+        UPDATE user
+        SET login_fail_count = #{loginFailCount},
+            status           = #{status},
+            lock_time        = #{lockTime},
+            update_time      = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- ============================================================
+         5. 重置登录失败信息（登录成功后调用）
+         - 失败次数归零，状态置为 0-正常，锁定时间清空
+         ============================================================ -->
+    <update id="resetLoginFailInfo" parameterType="long">
+        UPDATE user
+        SET login_fail_count = 0,
+            status           = 0,
+            lock_time        = NULL,
+            update_time      = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- ============================================================
+         6. 更新用户密码
+         ============================================================ -->
+    <update id="updatePassword">
+        UPDATE user
+        SET password    = #{password},
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- ============================================================
+         7. 条件统计用户总数（管理员分页查询用）
+         ============================================================ -->
+    <select id="countUsers" parameterType="map" resultType="long">
+        SELECT COUNT(1)
+        FROM user
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (username LIKE CONCAT('%', #{keyword}, '%')
+                     OR name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="role != null">
+                AND role = #{role}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+            <if test="department != null and department != ''">
+                AND department LIKE CONCAT('%', #{department}, '%')
+            </if>
+        </where>
+    </select>
+
+    <!-- ============================================================
+         8. 条件分页查询用户列表（管理员用户管理）
+         - 默认按创建时间倒序，最新注册在前
+         ============================================================ -->
+    <select id="selectUsersPage" parameterType="map" resultMap="UserResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM user
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (username LIKE CONCAT('%', #{keyword}, '%')
+                     OR name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="role != null">
+                AND role = #{role}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+            <if test="department != null and department != ''">
+                AND department LIKE CONCAT('%', #{department}, '%')
+            </if>
+        </where>
+        ORDER BY create_time DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <!-- ============================================================
+         9. 根据主键删除用户（管理员删除用户）
+         ============================================================ -->
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM user WHERE id = #{id}
+    </delete>
+
+    <!-- ============================================================
+         10. 根据主键动态更新用户信息（管理员编辑用户）
+         - 仅更新非空字段，防止空值覆盖
+         ============================================================ -->
+    <update id="updateById" parameterType="com.qingzhi.demo.entity.User">
+        UPDATE user
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="username != null and username != ''">username = #{username},</if>
+            <if test="password != null and password != ''">password = #{password},</if>
+            <if test="name != null and name != ''">name = #{name},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="department != null">department = #{department},</if>
+            <if test="major != null">major = #{major},</if>
+            <if test="role != null">role = #{role},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="loginFailCount != null">login_fail_count = #{loginFailCount},</if>
+            <if test="lockTime != null">lock_time = #{lockTime},</if>
+            update_time = NOW()
+        </trim>
+        WHERE id = #{id}
+    </update>
+
+</mapper>

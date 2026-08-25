@@ -32,6 +32,12 @@ public class Result<T> implements Serializable {
         this.data = data;
     }
 
+    public Result(ResponseCodeEnum codeEnum, T data) {
+        this.code = codeEnum.getCode();
+        this.message = codeEnum.getMessage();
+        this.data = data;
+    }
+
     /**
      * 成功响应（不带业务数据）
      */

@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.qingzhi.demo.mapper.ResourceMapper">
+
+    <!-- ============================================================
+         字段映射 + 基础列
+         ============================================================ -->
+    <resultMap id="ResourceResultMap" type="com.qingzhi.demo.entity.Resource">
+        <id     property="id"              column="id"               />
+        <result property="title"           column="title"            />
+        <result property="description"     column="description"      />
+        <result property="course"          column="course"           />
+        <result property="uploaderId"      column="uploader_id"      />
+        <result property="fileName"        column="file_name"        />
+        <result property="filePath"        column="file_path"        />
+        <result property="fileSize"        column="file_size"        />
+        <result property="fileExt"         column="file_ext"         />
+        <result property="fileHash"        column="file_hash"        />
+        <result property="downloadCount"   column="download_count"   />
+        <result property="reviewStatus"    column="review_status"    />
+        <result property="rejectReason"    column="reject_reason"    />
+        <result property="reviewAdminId"   column="review_admin_id"  />
+        <result property="reviewTime"      column="review_time"      />
+        <result property="createTime"      column="create_time"      />
+        <result property="updateTime"      column="update_time"      />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, title, description, course, uploader_id, file_name, file_path,
+        file_size, file_ext, file_hash, download_count, review_status,
+        reject_reason, review_admin_id, review_time, create_time, update_time
+    </sql>
+
+    <!-- ============================================================
+         1. 按条件统计资源总数（分页 total）
+         ============================================================ -->
+    <select id="countResources" parameterType="map" resultType="long">
+        SELECT COUNT(1)
+        FROM resource
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (title LIKE CONCAT('%', #{keyword}, '%')
+                     OR description LIKE CONCAT('%', #{keyword}, '%')
+                     OR course LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="course != null and course != ''">
+                AND course LIKE CONCAT('%', #{course}, '%')
+            </if>
+            <if test="reviewStatus != null">
+                AND review_status = #{reviewStatus}
+            </if>
+            <if test="uploaderId != null">
+                AND uploader_id = #{uploaderId}
+            </if>
+            <if test="startDate != null">
+                AND create_time <![CDATA[>=]]> CONCAT(#{startDate}, ' 00:00:00')
+            </if>
+            <if test="endDate != null">
+                AND create_time <![CDATA[<]]> CONCAT(DATE_ADD(#{endDate}, INTERVAL 1 DAY), ' 00:00:00')
+            </if>
+        </where>
+    </select>
+
+    <!-- ============================================================
+         2. 按条件分页查询资源列表（按发布时间倒序）
+         ============================================================ -->
+    <select id="selectResourcesPage" parameterType="map" resultMap="ResourceResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM resource
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (title LIKE CONCAT('%', #{keyword}, '%')
+                     OR description LIKE CONCAT('%', #{keyword}, '%')
+                     OR course LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="course != null and course != ''">
+                AND course LIKE CONCAT('%', #{course}, '%')
+            </if>
+            <if test="reviewStatus != null">
+                AND review_status = #{reviewStatus}
+            </if>
+            <if test="uploaderId != null">
+                AND uploader_id = #{uploaderId}
+            </if>
+            <if test="startDate != null">
+                AND create_time <![CDATA[>=]]> CONCAT(#{startDate}, ' 00:00:00')
+            </if>
+            <if test="endDate != null">
+                AND create_time <![CDATA[<]]> CONCAT(DATE_ADD(#{endDate}, INTERVAL 1 DAY), ' 00:00:00')
+            </if>
+        </where>
+        ORDER BY create_time DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <!-- ============================================================
+         3. 按主键查询资源
+         ============================================================ -->
+    <select id="selectById" resultMap="ResourceResultMap" parameterType="long">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM resource
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <!-- ============================================================
+         4. 审核资源（通过/拒绝）
+         - 写入 review_status / reject_reason / review_admin_id / review_time
+         ============================================================ -->
+    <update id="updateReviewStatus" parameterType="com.qingzhi.demo.entity.Resource">
+        UPDATE resource
+        SET review_status   = #{reviewStatus},
+            reject_reason   = #{rejectReason},
+            review_admin_id = #{reviewAdminId},
+            review_time     = #{reviewTime},
+            update_time     = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- ============================================================
+         5. 根据主键删除资源
+         ============================================================ -->
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM resource WHERE id = #{id}
+    </delete>
+
+</mapper>
