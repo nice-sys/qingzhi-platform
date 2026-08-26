@@ -262,7 +262,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\smoke.ps1
 
 **MIT License** © 青知共享平台
 
-简单说：**你可以自由使用、修改、分发、商用，但请保留本仓库的版权声明和 MIT License 副本**，作者不承担任何因使用本软件产生的连带责任。
+本仓库由作者本人自己开发，可以自由使用、修改、分发，但作者不承担任何因使用本软件产生的连带责任。
 
 ---
 
