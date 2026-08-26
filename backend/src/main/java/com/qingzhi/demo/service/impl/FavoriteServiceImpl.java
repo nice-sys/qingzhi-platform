@@ -59,10 +59,11 @@ public class FavoriteServiceImpl implements FavoriteService {
         boolean existed = already > 0;
         boolean favorited = false;
         if (!existed) {
-            // 4. 未收藏 → 插入
+            // 4. 未收藏 → 插入（填充 create_time，避免 NOT NULL 报错）
             Favorite fav = new Favorite();
             fav.setUserId(userId);
             fav.setResourceId(resourceId);
+            fav.setCreateTime(java.time.LocalDateTime.now());
             int rows = favoriteMapper.insert(fav);
             favorited = rows > 0;
             if (favorited) {

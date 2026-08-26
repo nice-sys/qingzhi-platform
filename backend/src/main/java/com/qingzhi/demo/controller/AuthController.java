@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>对应 PRD 2.1 用户认证模块；所有接口不携带 JWT 即可访问（白名单）</p>
  */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")
 public class AuthController {
 
     @Autowired

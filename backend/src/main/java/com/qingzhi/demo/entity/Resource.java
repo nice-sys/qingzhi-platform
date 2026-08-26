@@ -99,6 +99,17 @@ public class Resource implements Serializable {
      */
     private LocalDateTime updateTime;
 
+    /* ====================================================================================
+     * 非持久化辅助字段（仅用于请求参数 / 响应 DTO 传递，MyBatis 通过 resultMap 映射时自动忽略）
+     * ==================================================================================== */
+
+    /**
+     * 发布资源时传的「上传文件ID」；Service 层会根据这个值查 file_storage 表，
+     * 自动回填 fileName / filePath / fileSize / fileExt / fileHash。
+     * （若前端直接传了 filePath 等 6 个字段，则此字段忽略）
+     */
+    private transient Long fileStorageId;
+
     public Resource() {
     }
 
@@ -183,4 +194,11 @@ public class Resource implements Serializable {
 
     public LocalDateTime getUpdateTime() { return updateTime; }
     public void setUpdateTime(LocalDateTime updateTime) { this.updateTime = updateTime; }
+
+    /* ====================================================================================
+     * 非持久化辅助字段 getter/setter
+     * ==================================================================================== */
+
+    public Long getFileStorageId() { return fileStorageId; }
+    public void setFileStorageId(Long fileStorageId) { this.fileStorageId = fileStorageId; }
 }

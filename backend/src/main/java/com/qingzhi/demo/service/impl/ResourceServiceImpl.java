@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
+import org.springframework.util.StringUtils;
 
 /**
  * 资源服务实现（普通用户侧）
@@ -47,7 +48,7 @@ public class ResourceServiceImpl implements ResourceService {
         // 1. 基础校验：当前用户、必填字段
         BusinessException.throwIfNull(uploaderId, ResponseCodeEnum.UNAUTHORIZED);
         BusinessException.throwIfBlank(resourceDto.getTitle(),
-                ResponseCodeEnum.RESOURCE_NOT_FOUND, "资源标题不能为空");
+                ResponseCodeEnum.PARAM_ERROR, "资源标题不能为空");
         BusinessException.throwIf(resourceDto.getTitle().length() > Constants.RESOURCE_TITLE_MAX_LENGTH,
                 ResponseCodeEnum.PARAM_ERROR,
                 "资源标题长度不能超过 " + Constants.RESOURCE_TITLE_MAX_LENGTH);
@@ -57,16 +58,39 @@ public class ResourceServiceImpl implements ResourceService {
                 ResponseCodeEnum.PARAM_ERROR,
                 "课程名称长度不能超过 " + Constants.COURSE_MAX_LENGTH);
 
-        // 2. 校验 fileStorageId 合法性，并补全资源的文件信息（file_path / file_name / file_size / file_ext / file_hash）
-        Long fileStorageId = resourceDto.getId(); // 这里复用一个临时字段：前端放在 title/course 之外的 id 作为 fileStorageId？
-        // 改为：约定上传后返回的 fileStorageId 存进 Resource 中，用一个不存在混淆的字段。
-        // 更简洁的做法：直接使用 resourceDto.filePath / fileName / fileSize / fileExt / fileHash，由前端从上传接口返回值中回填。
-        // → 若 file_path 未传，则尝试按 fileStorageId（存入一个临时 dto 字段）查 file_storage。
+        // 2. 文件信息补全（支持两种方式：A.传 fileStorageId，B.前端已传 fileName/filePath/fileSize/fileExt/fileHash）
+        // 只要 filePath 或 fileName 任一个为空，且 fileStorageId 有值，就用 fileStorageId 查 FileStorage 表回填
+        if ((!StringUtils.hasText(resourceDto.getFilePath())
+                || !StringUtils.hasText(resourceDto.getFileName()))
+                && resourceDto.getFileStorageId() != null) {
+            FileStorage fs = fileService.getFileStorageById(resourceDto.getFileStorageId());
+            BusinessException.throwIfNull(fs, ResponseCodeEnum.FILE_NOT_FOUND,
+                    "关联的文件不存在(fileStorageId=" + resourceDto.getFileStorageId() + ")");
+            // 回填 6 个文件字段
+            if (!StringUtils.hasText(resourceDto.getFileName())) {
+                resourceDto.setFileName(fs.getOriginalFileName());
+            }
+            if (!StringUtils.hasText(resourceDto.getFilePath())) {
+                resourceDto.setFilePath(fs.getFilePath());
+            }
+            if (resourceDto.getFileSize() == null) {
+                resourceDto.setFileSize(fs.getFileSize());
+            }
+            if (!StringUtils.hasText(resourceDto.getFileExt())) {
+                resourceDto.setFileExt(fs.getFileExt());
+            }
+            if (!StringUtils.hasText(resourceDto.getFileHash())) {
+                resourceDto.setFileHash(fs.getFileHash());
+            }
+        }
+
+        // 3. 最终文件校验（filePath + fileName 必传）
         BusinessException.throwIfBlank(resourceDto.getFilePath(),
-                ResponseCodeEnum.PARAM_ERROR, "请先上传文件后再发布资源（filePath 必填）");
+                ResponseCodeEnum.PARAM_ERROR, "请先上传文件后再发布资源（filePath 必填，或传 fileStorageId 自动关联）");
         BusinessException.throwIfBlank(resourceDto.getFileName(),
                 ResponseCodeEnum.PARAM_ERROR, "文件名不能为空");
-        BusinessException.throwIf(resourceDto.getFilePath().length() > Constants.FILE_PATH_MAX_LENGTH,
+        BusinessException.throwIf(!StringUtils.hasText(resourceDto.getFilePath())
+                || resourceDto.getFilePath().length() > Constants.FILE_PATH_MAX_LENGTH,
                 ResponseCodeEnum.PARAM_ERROR, "文件路径长度超限");
 
         // 3. 组装入库对象：强制 review_status = 0（待审核）

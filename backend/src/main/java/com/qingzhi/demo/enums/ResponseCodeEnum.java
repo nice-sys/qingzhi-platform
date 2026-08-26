@@ -58,7 +58,23 @@ public enum ResponseCodeEnum {
     USER_NOT_EXIST(2005, "用户不存在"),
 
     /** 账号已存在（别名：同 ACCOUNT_ALREADY_EXISTS，方便管理员创建用户时语义化使用） */
-    USERNAME_EXIST(2001, "账号已存在");
+    USERNAME_EXIST(2001, "账号已存在"),
+
+    /* ================================================================================
+     * 补充业务层使用到的错误码（与 Service/Controller 调用一一对应）
+     * ================================================================================ */
+
+    /** 文件上传失败（落盘/哈希计算等异常） */
+    FILE_UPLOAD_FAILED(5004, "文件上传失败"),
+
+    /** 文件不存在（指定 fileStorageId 查询无记录） */
+    FILE_NOT_FOUND(5005, "文件不存在"),
+
+    /** 通用 401 未登录（与 NOT_LOGGED_IN 等价，但部分 Controller/Service 习惯用此别名） */
+    UNAUTHORIZED(1001, "未登录或登录已过期"),
+
+    /** 权限不足（与 NO_PERMISSION 等价，但部分 Service 用此别名语义更直观） */
+    PERMISSION_DENIED(1002, "无权限执行该操作");
 
     /** 状态码：1 表示成功，其他表示失败 */
     private final int code;

@@ -44,13 +44,43 @@ public class JwtInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        // 2. 从 Header 获取 Token
+        // 2. 匿名接口放行（白名单已被 WebConfig exclude 了；这里处理「白名单外但仍允许匿名」的公开 GET 接口，
+        //    如 GET /resource/{id}（纯数字）、GET /resource/list。
+        //    逻辑：
+        //      · 若 Authorization 头有值 → 继续 JWT 校验（登录态不丢）
+        //      · 若 Authorization 头为空 → 直接放行（userId=null 作为匿名用户）
+        String requestUri = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (contextPath != null && !contextPath.isEmpty() && requestUri.startsWith(contextPath)) {
+            requestUri = requestUri.substring(contextPath.length());
+        }
+        // 匹配公开 GET 接口
+        boolean isPublicGet = false;
+        if ("GET".equalsIgnoreCase(request.getMethod())) {
+            if ("/resource/list".equals(requestUri)
+                    || "/resource/courses".equals(requestUri)
+                    || "/resource/stats".equals(requestUri)) {
+                isPublicGet = true;
+            } else {
+                // /resource/{id} ：正则 /resource/\d+
+                if (requestUri.matches("^/resource/\\d+$")) {
+                    isPublicGet = true;
+                }
+            }
+        }
+
+        // 3. 从 Header 获取 Token
         String header = request.getHeader(jwtConfig.getHeaderName());
         if (header == null || header.isEmpty()) {
+            // 公开 GET 接口：匿名放行
+            if (isPublicGet) {
+                return true;
+            }
+            // 非公开接口：1001 未登录
             throw new BusinessException(ResponseCodeEnum.NOT_LOGGED_IN);
         }
 
-        // 3. 移除 Token 前缀（Bearer）
+        // 4. 移除 Token 前缀（Bearer）
         String token;
         if (header.startsWith(jwtConfig.getTokenPrefix())) {
             token = header.substring(jwtConfig.getTokenPrefix().length());
@@ -58,13 +88,25 @@ public class JwtInterceptor implements HandlerInterceptor {
             token = header; // 兼容不带前缀的请求
         }
         if (token.isEmpty()) {
+            if (isPublicGet) {
+                return true;
+            }
             throw new BusinessException(ResponseCodeEnum.NOT_LOGGED_IN);
         }
 
-        // 4. 解析 Token（此处会自动校验签名与过期时间，失败抛出 1001）
-        Claims claims = jwtUtil.parseToken(token);
+        // 5. 解析 Token（此处会自动校验签名与过期时间）
+        Claims claims;
+        try {
+            claims = jwtUtil.parseToken(token);
+        } catch (Exception e) {
+            // 公开 GET：JWT 过期/无效也允许匿名访问（至少能看到资源，只是未登录态）
+            if (isPublicGet) {
+                return true;
+            }
+            throw new BusinessException(ResponseCodeEnum.NOT_LOGGED_IN);
+        }
 
-        // 5. 将解析出的用户信息存入 request 属性，供业务层使用
+        // 6. 将解析出的用户信息存入 request 属性，供业务层使用
         Long userId = claims.get(jwtConfig.getClaimUserId(), Long.class);
         Integer role = claims.get(jwtConfig.getClaimRole(), Integer.class);
         String username = claims.get(jwtConfig.getClaimUsername(), String.class);

@@ -1,10 +1,36 @@
--- ============================================================
+﻿-- ============================================================
 -- 青知共享平台 - 数据库初始化脚本
 -- 数据库：qingzhi_platform
 -- 字符集：utf8mb4  排序规则：utf8mb4_0900_ai_ci
+--
+-- 【★★★ 中文乱码 / ERROR 1366 必看：正确执行方式 ★★★】
+-- 本文件必须以 UTF-8（含 BOM）编码保存（当前已按此编码重写）。
+--
+--   方式 1：Windows 命令行 / PowerShell（推荐，最稳妥）
+--       mysql -uroot --default-character-set=utf8mb4 -e "source d:/QingZhi/backend/sql/init.sql"
+--       或
+--       mysql -uroot --default-character-set=utf8mb4 < d:\QingZhi\backend\sql\init.sql
+--
+--   方式 2：已进入 mysql 交互式客户端
+--       mysql> SET NAMES utf8mb4;
+--       mysql> SET CHARACTER SET utf8mb4;
+--       mysql> source d:/QingZhi/backend/sql/init.sql;
+--
+--   禁止使用：未加 --default-character-set 直接 < 重定向（中文 Windows 默认 cp936/GBK，
+--            即使 SET NAMES utf8mb4 也会 1366 Incorrect string value）。
 -- ============================================================
 
 SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+SET SESSION character_set_client     = utf8mb4;
+SET SESSION character_set_connection = utf8mb4;
+SET SESSION character_set_results    = utf8mb4;
+SET SESSION character_set_database   = utf8mb4;
+SET SESSION character_set_server     = utf8mb4;
+SET SESSION collation_connection     = utf8mb4_0900_ai_ci;
+SET SESSION collation_database       = utf8mb4_0900_ai_ci;
+SET SESSION collation_server         = utf8mb4_0900_ai_ci;
+
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- --------------------------------------------------------
@@ -40,7 +66,7 @@ CREATE TABLE `user` (
     UNIQUE KEY `uk_username` (`username`),
     KEY `idx_role` (`role`),
     KEY `idx_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=10001 DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+) ENGINE=InnoDB AUTO_INCREMENT=10001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户表';
 
 -- --------------------------------------------------------
 -- 2. 资源表（resource）  PRD 4.2
@@ -70,7 +96,7 @@ CREATE TABLE `resource` (
     KEY `idx_review_status` (`review_status`),
     KEY `idx_create_time` (`create_time`),
     KEY `idx_file_hash` (`file_hash`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='资源表';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='资源表';
 
 -- --------------------------------------------------------
 -- 3. 收藏表（favorite）  PRD 4.3
@@ -85,7 +111,7 @@ CREATE TABLE `favorite` (
     UNIQUE KEY `uk_user_resource` (`user_id`, `resource_id`),
     KEY `idx_user_id` (`user_id`),
     KEY `idx_resource_id` (`resource_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='收藏表';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收藏表';
 
 -- --------------------------------------------------------
 -- 4. 文件存储表（file_storage）  PRD 4.4  加分项「秒传」
@@ -100,7 +126,7 @@ CREATE TABLE `file_storage` (
     `create_time`     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次上传时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_file_hash` (`file_hash`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='文件存储表（秒传引用计数）';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='文件存储表（秒传引用计数）';
 
 -- ============================================================
 -- 5. 预置初始管理员账号
@@ -109,20 +135,21 @@ CREATE TABLE `file_storage` (
 -- ============================================================
 INSERT INTO `user` (
     `id`, `username`, `password`, `name`, `phone`, `email`, `department`, `major`,
-    `role`, `status`, `login_fail_count`, `lock_time`, `create_time`, `update_time`
+    `avatar_url`, `role`, `status`, `login_fail_count`, `lock_time`, `create_time`, `update_time`
 ) VALUES (
-    1,                               -- id
-    'Admin',                         -- username
-    'a41ae6c8735913b45643a8b790097993',  -- MD5("Admin2026")
-    '超级管理员',                    -- name
-    NULL,                            -- phone
-    'admin@qingzhi.edu.cn',          -- email
-    '系统管理',                      -- department
-    NULL,                            -- major
-    0,                               -- role = ADMIN
-    0,                               -- status = 正常
-    0,                               -- login_fail_count
-    NULL,                            -- lock_time
+    1,                                         -- id
+    'Admin',                                   -- username
+    'a41ae6c8735913b45643a8b790097993',        -- MD5("Admin2026")
+    '超级管理员',                               -- name
+    NULL,                                      -- phone
+    'admin@qingzhi.edu.cn',                    -- email
+    '系统管理',                                 -- department
+    NULL,                                      -- major
+    NULL,                                      -- avatar_url
+    0,                                         -- role = ADMIN
+    0,                                         -- status = 正常
+    0,                                         -- login_fail_count
+    NULL,                                      -- lock_time
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 );

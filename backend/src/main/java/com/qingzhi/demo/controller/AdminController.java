@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.*;
  * {@link com.qingzhi.demo.enums.ResponseCodeEnum#NO_PERMISSION} 无权限异常。</p>
  */
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("/admin")
 public class AdminController {
 
     private final AdminService adminService;

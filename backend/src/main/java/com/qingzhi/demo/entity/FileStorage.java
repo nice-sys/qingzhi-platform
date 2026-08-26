@@ -31,6 +31,16 @@ public class FileStorage implements Serializable {
     private String filePath;
 
     /**
+     * 用户上传时的原始文件名（带扩展名，用于下载时还原文件名）
+     */
+    private String originalFileName;
+
+    /**
+     * 文件扩展名（小写，无点，如 pdf/docx/png）
+     */
+    private String fileExt;
+
+    /**
      * 文件大小（字节数）
      */
     private Long fileSize;
@@ -76,6 +86,12 @@ public class FileStorage implements Serializable {
     public void setFilePath(String filePath) {
         this.filePath = filePath;
     }
+
+    public String getOriginalFileName() { return originalFileName; }
+    public void setOriginalFileName(String originalFileName) { this.originalFileName = originalFileName; }
+
+    public String getFileExt() { return fileExt; }
+    public void setFileExt(String fileExt) { this.fileExt = fileExt; }
 
     public Long getFileSize() {
         return fileSize;

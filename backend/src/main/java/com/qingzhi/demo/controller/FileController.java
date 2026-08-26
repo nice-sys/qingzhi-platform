@@ -8,11 +8,11 @@ import com.qingzhi.demo.enums.ResponseCodeEnum;
 import com.qingzhi.demo.exception.BusinessException;
 import com.qingzhi.demo.interceptor.JwtInterceptor;
 import com.qingzhi.demo.service.FileService;
+import com.qingzhi.demo.service.ResourceService;
 import com.qingzhi.demo.utils.FileUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,15 +32,18 @@ import java.util.Map;
  * <p>接口路径统一 /api/file，已在 WebConfig 注册 JwtInterceptor（除放行路径外需登录）。</p>
  */
 @RestController
-@RequestMapping("/api/file")
+@RequestMapping("/file")
 public class FileController {
 
     private static final Logger log = LoggerFactory.getLogger(FileController.class);
 
     private final FileService fileService;
 
-    public FileController(FileService fileService) {
+    private final ResourceService resourceService;
+
+    public FileController(FileService fileService, ResourceService resourceService) {
         this.fileService = fileService;
+        this.resourceService = resourceService;
     }
 
     /* ====================================================================================
@@ -64,34 +67,44 @@ public class FileController {
     }
 
     /* ====================================================================================
-     * 2. 文件下载
-     *    GET /api/file/download/{id}
-     *    PathVariable: id = file_storage.id
+     * 2. 文件下载（按 Resource.id 下载，PRD 流程：在资源详情页点击下载按钮 → 传 resourceId）
+     *    GET /api/file/download/{resourceId}
+     *    PathVariable: resourceId = resource.id
      *    响应：application/octet-stream，浏览器触发下载
+     *    副作用：reviewStatus=1（已通过）时，resource.download_count 原子 +1
      * ==================================================================================== */
 
-    @GetMapping("/download/{id}")
-    public ResponseEntity<Resource> download(@PathVariable("id") Long id,
+    @GetMapping("/download/{resourceId}")
+    public ResponseEntity<org.springframework.core.io.Resource> download(@PathVariable("resourceId") Long resourceId,
                                              HttpServletRequest request) {
         // 1. 登录态校验（JwtInterceptor 已注入当前用户，但这里兜底校验，防止匿名访问下载接口）
         Long currentUserId = JwtInterceptor.getCurrentUserId(request);
+        Integer currentUserRole = JwtInterceptor.getCurrentUserRole(request);
         BusinessException.throwIf(currentUserId == null,
                 ResponseCodeEnum.UNAUTHORIZED);
 
-        // 2. 校验 fileStorage 是否存在
-        FileStorage storage = fileService.getFileStorageById(id);
-        BusinessException.throwIfNull(storage,
-                ResponseCodeEnum.FILE_NOT_FOUND, "文件不存在或已被删除");
+        // 2. 用 resourceId 走 ResourceService.downloadResource：
+        //    - 校验资源可见性（审核状态/上传者/管理员权限）
+        //    - 原子 download_count +1
+        //    - 返回 Resource entity（含 fileName / filePath / fileHash 等）
+        com.qingzhi.demo.entity.Resource resource = resourceService.downloadResource(resourceId, currentUserId, currentUserRole);
 
-        // 3. 解析磁盘绝对路径并校验文件存在性
-        Path absPath = fileService.resolveFile(storage.getFilePath());
+        // 3. 根据 Resource.filePath 解析磁盘绝对路径并校验文件存在性
+        BusinessException.throwIfBlank(resource.getFilePath(),
+                ResponseCodeEnum.FILE_NOT_FOUND, "该资源尚未上传文件，无法下载");
+        Path absPath = fileService.resolveFile(resource.getFilePath());
         BusinessException.throwIfNull(absPath,
                 ResponseCodeEnum.FILE_NOT_FOUND, "文件磁盘记录缺失，请联系管理员");
 
         // 4. 组装下载响应（Content-Disposition 支持中文文件名）
-        Resource resource = new FileSystemResource(absPath.toFile());
+        org.springframework.core.io.Resource fileResource = new FileSystemResource(absPath.toFile());
+        String originalName = resource.getFileName();
+        if (originalName == null || originalName.isEmpty()) {
+            int slashIdx = (resource.getFilePath() == null) ? -1 : resource.getFilePath().lastIndexOf('/');
+            originalName = (slashIdx < 0) ? resource.getFilePath() : resource.getFilePath().substring(slashIdx + 1);
+            if (originalName == null || originalName.isEmpty()) originalName = "download";
+        }
 
-        String originalName = extractDownloadFileName(storage, absPath);
         String encoded;
         try {
             encoded = URLEncoder.encode(originalName, StandardCharsets.UTF_8.name()).replace("+", "%20");
@@ -101,30 +114,25 @@ public class FileController {
         String contentDisposition = "attachment; filename=\"" + encoded + "\"; filename*=UTF-8''" + encoded;
 
         String contentType = guessMediaType(originalName);
+        Long fileLen = resource.getFileSize();
+        if (fileLen == null || fileLen < 0) {
+            fileLen = absPath.toFile().length();
+        }
+
+        log.info("资源下载完成：resourceId={}, viewerId={}, downloadCount={}",
+                resourceId, currentUserId, resource.getDownloadCount());
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
                 .header("Access-Control-Expose-Headers", HttpHeaders.CONTENT_DISPOSITION)
-                .contentLength(storage.getFileSize() != null ? storage.getFileSize() : absPath.toFile().length())
-                .body(resource);
+                .contentLength(fileLen)
+                .body(fileResource);
     }
 
     /* ====================================================================================
      * 3. 私有辅助方法
      * ==================================================================================== */
-
-    /**
-     * 提取下载时展示给用户的文件名：
-     * - 优先使用 resource 表中记录的原始文件（若将来有 Resource 关联）；
-     * - 当前版本：从相对路径末尾提取 UUID 文件名 + 扩展名，保证下载文件可被打开；
-     *   （resource 发布流程完成后，可改为由 Resource 表的 file_name 回填，体验更友好）
-     */
-    private String extractDownloadFileName(FileStorage storage, Path absPath) {
-        if (storage == null || storage.getFilePath() == null) return "download";
-        int slash = storage.getFilePath().lastIndexOf('/');
-        return slash < 0 ? storage.getFilePath() : storage.getFilePath().substring(slash + 1);
-    }
 
     /**
      * 根据扩展名猜测下载 Content-Type（默认 application/octet-stream 触发浏览器下载）

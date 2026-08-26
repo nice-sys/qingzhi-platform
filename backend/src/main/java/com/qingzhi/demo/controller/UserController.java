@@ -24,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
  * <p>此控制器下所有接口均需 JWT 鉴权（/api/user/** 不在白名单中）</p>
  */
 @RestController
-@RequestMapping("/api/user")
+@RequestMapping("/user")
 public class UserController {
 
     @Autowired

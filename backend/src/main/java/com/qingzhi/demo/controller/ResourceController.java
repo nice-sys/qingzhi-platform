@@ -33,7 +33,7 @@ import java.util.Map;
  * 避免常量名拼写错误。
  */
 @RestController
-@RequestMapping("/api/resource")
+@RequestMapping("/resource")
 public class ResourceController {
 
     private final ResourceService resourceService;

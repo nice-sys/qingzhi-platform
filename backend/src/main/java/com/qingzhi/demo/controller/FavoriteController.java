@@ -20,7 +20,7 @@ import java.util.Map;
  * <p>所有当前用户信息统一通过 JwtInterceptor.getXxx() 静态方法获取。</p>
  */
 @RestController
-@RequestMapping("/api/favorite")
+@RequestMapping("/favorite")
 public class FavoriteController {
 
     private final FavoriteService favoriteService;

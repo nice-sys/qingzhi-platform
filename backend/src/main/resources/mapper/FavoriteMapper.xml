@@ -105,7 +105,7 @@
          - 按 f.create_time DESC（最新收藏在前）
          - 返回 Resource 字段（对应 Resource 实体）
          ============================================================ -->
-    <select id="selectMyFavoritesPage" resultMap="com.qingzhi.demo.mapper.ResourceMapper.BaseResultMap">
+    <select id="selectMyFavoritesPage" resultMap="com.qingzhi.demo.mapper.ResourceMapper.ResourceResultMap">
         SELECT <include refid="Resource_Column_List"/>
         FROM favorite f
         INNER JOIN resource r ON f.resource_id = r.id

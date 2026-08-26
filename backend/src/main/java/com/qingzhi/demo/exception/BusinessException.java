@@ -126,6 +126,48 @@ public class BusinessException extends RuntimeException {
         }
     }
 
+    /* ================================================================================
+     * 补充断言：对象/字符串/集合空值快速断言（Service 层大量使用）
+     * ================================================================================ */
+
+    /**
+     * 空值断言：当 value == null 时抛出
+     *
+     * @param value    要检查的值
+     * @param codeEnum 错误码枚举
+     */
+    public static void throwIfNull(Object value, ResponseCodeEnum codeEnum) {
+        if (value == null) {
+            throwOf(codeEnum);
+        }
+    }
+
+    /**
+     * 空值断言：当 value == null 时抛出（带自定义提示）
+     *
+     * @param value    要检查的值
+     * @param codeEnum 错误码枚举
+     * @param message  自定义提示
+     */
+    public static void throwIfNull(Object value, ResponseCodeEnum codeEnum, String message) {
+        if (value == null) {
+            throwOf(codeEnum, message);
+        }
+    }
+
+    /**
+     * 空白字符串断言：当 str 为 null 或空串或仅含空白时抛出
+     *
+     * @param str      要检查的字符串
+     * @param codeEnum 错误码枚举
+     * @param message  自定义提示
+     */
+    public static void throwIfBlank(String str, ResponseCodeEnum codeEnum, String message) {
+        if (str == null || str.isBlank()) {
+            throwOf(codeEnum, message);
+        }
+    }
+
     public Integer getCode() {
         return code;
     }
