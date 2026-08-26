@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.qingzhi.demo.mapper.FileStorageMapper">
+
+    <!-- ============================================================
+         ResultMap（文件存储表 file_storage）
+         对应 PRD 4.4：
+         id BIGINT PK AUTO_INCREMENT
+         file_hash VARCHAR(64) UNIQUE NOT NULL
+         file_path VARCHAR(500) NOT NULL
+         file_size BIGINT
+         reference_count INT NOT NULL DEFAULT 1
+         create_time DATETIME NOT NULL
+         ============================================================ -->
+    <resultMap id="BaseResultMap" type="com.qingzhi.demo.entity.FileStorage">
+        <id     column="id"              property="id"             />
+        <result column="file_hash"       property="fileHash"       />
+        <result column="file_path"       property="filePath"       />
+        <result column="file_size"       property="fileSize"       />
+        <result column="reference_count" property="referenceCount" />
+        <result column="create_time"     property="createTime"     />
+    </resultMap>
+
+    <!-- 通用查询列 -->
+    <sql id="Base_Column_List">
+        id, file_hash, file_path, file_size, reference_count, create_time
+    </sql>
+
+    <!-- ============================================================
+         1. 按哈希查找（秒传命中判断）
+         ============================================================ -->
+    <select id="selectByFileHash" parameterType="string" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM file_storage
+        WHERE file_hash = #{fileHash}
+        LIMIT 1
+    </select>
+
+    <!-- ============================================================
+         2. 按主键查询
+         ============================================================ -->
+    <select id="selectById" parameterType="long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM file_storage
+        WHERE id = #{id}
+    </select>
+
+    <!-- ============================================================
+         3. 插入新的文件存储记录
+         - create_time 默认 NOW()
+         - reference_count 默认 1
+         - useGeneratedKeys 回填主键到 storage.id
+         ============================================================ -->
+    <insert id="insert" parameterType="com.qingzhi.demo.entity.FileStorage"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO file_storage
+        (file_hash, file_path, file_size, reference_count, create_time)
+        VALUES (
+            #{fileHash},
+            #{filePath},
+            #{fileSize},
+            COALESCE(#{referenceCount}, 1),
+            COALESCE(#{createTime}, NOW())
+        )
+    </insert>
+
+    <!-- ============================================================
+         4. 引用计数 +1（秒传命中时调用）
+         ============================================================ -->
+    <update id="incrementReferenceCount" parameterType="long">
+        UPDATE file_storage
+        SET reference_count = reference_count + 1
+        WHERE id = #{id}
+    </update>
+
+    <!-- ============================================================
+         5. 引用计数 -1（Resource 删除时调用）
+         - 只在计数 > 0 时才允许减，避免负溢出
+         ============================================================ -->
+    <update id="decrementReferenceCount" parameterType="long">
+        UPDATE file_storage
+        SET reference_count = reference_count - 1
+        WHERE id = #{id} AND reference_count > 0
+    </update>
+
+    <!-- ============================================================
+         6. 按主键删除（计数归 0 后清理 DB 记录时调用）
+         ============================================================ -->
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM file_storage WHERE id = #{id}
+    </delete>
+
+</mapper>

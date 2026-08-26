@@ -1,25 +1,72 @@
 package com.qingzhi.demo.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import java.io.Serializable;
+import java.time.LocalDateTime;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@TableName("student")
-public class Student {
+/**
+ * 收藏实体类
+ * <p>对应 PRD 4.3 收藏表（favorite）</p>
+ */
+public class Favorite implements Serializable {
 
-    @TableId(type = IdType.AUTO)
-    private Long id; // 学生id（主键）
-    private String stuId; // 学号（12位纯数字，唯一）
-    private String name; // 姓名
-    private String phone; // 手机号
-    private String email; // 邮箱
-    private String department; // 院系
-    private String major; // 专业
-    private Long userId; // 关联 user 表的 id（用于登录认证）
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 主键ID（BIGINT, PK, AUTO_INCREMENT）
+     */
+    private Long id;
+
+    /**
+     * 用户ID（BIGINT, FK -> user.id, NOT NULL）
+     */
+    private Long userId;
+
+    /**
+     * 资源ID（BIGINT, FK -> resource.id, NOT NULL）
+     */
+    private Long resourceId;
+
+    /**
+     * 收藏时间（DATETIME, NOT NULL）
+     */
+    private LocalDateTime createTime;
+
+    public Favorite() {
+    }
+
+    /* ============================================================
+     * Getter / Setter
+     * ============================================================ */
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public Long getResourceId() {
+        return resourceId;
+    }
+
+    public void setResourceId(Long resourceId) {
+        this.resourceId = resourceId;
+    }
+
+    public LocalDateTime getCreateTime() {
+        return createTime;
+    }
+
+    public void setCreateTime(LocalDateTime createTime) {
+        this.createTime = createTime;
+    }
 }

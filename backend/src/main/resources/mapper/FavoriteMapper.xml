@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.qingzhi.demo.mapper.FavoriteMapper">
+
+    <!-- ============================================================
+         1. ResultMap：favorite 实体映射
+         PRD 4.3：id / user_id / resource_id / create_time
+         ============================================================ -->
+    <resultMap id="FavoriteResultMap" type="com.qingzhi.demo.entity.Favorite">
+        <id     column="id"          property="id"         />
+        <result column="user_id"     property="userId"     />
+        <result column="resource_id" property="resourceId" />
+        <result column="create_time" property="createTime" />
+    </resultMap>
+
+    <sql id="Favorite_Base_Column_List">
+        id, user_id, resource_id, create_time
+    </sql>
+
+    <!-- 复用 ResourceMapper 的 Base_Column_List（联表查询时用） -->
+    <sql id="Resource_Column_List">
+        r.id, r.title, r.description, r.course, r.uploader_id,
+        r.file_name, r.file_path, r.file_size, r.file_ext, r.file_hash,
+        r.download_count, r.review_status, r.reject_reason,
+        r.review_admin_id, r.review_time, r.create_time, r.update_time
+    </sql>
+
+    <!-- ============================================================
+         2. 插入收藏记录（insert）
+         - create_time 默认 NOW()
+         - useGeneratedKeys 回填主键到 favorite.id
+         ============================================================ -->
+    <insert id="insert" parameterType="com.qingzhi.demo.entity.Favorite"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO favorite
+        (user_id, resource_id, create_time)
+        VALUES (
+            #{userId},
+            #{resourceId},
+            COALESCE(#{createTime}, NOW())
+        )
+    </insert>
+
+    <!-- ============================================================
+         3. 取消收藏：按 userId + resourceId 删除
+         ============================================================ -->
+    <delete id="deleteByUserAndResource">
+        DELETE FROM favorite
+        WHERE user_id = #{userId} AND resource_id = #{resourceId}
+    </delete>
+
+    <!-- ============================================================
+         4. 按主键删除
+         ============================================================ -->
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM favorite WHERE id = #{id}
+    </delete>
+
+    <!-- ============================================================
+         5. 判断某用户是否已收藏某资源（count）
+         ============================================================ -->
+    <select id="countByUserAndResource" resultType="int">
+        SELECT COUNT(*)
+        FROM favorite
+        WHERE user_id = #{userId} AND resource_id = #{resourceId}
+    </select>
+
+    <!-- ============================================================
+         6. 按 userId + resourceId 查询单条记录
+         ============================================================ -->
+    <select id="selectByUserAndResource" resultMap="FavoriteResultMap">
+        SELECT <include refid="Favorite_Base_Column_List"/>
+        FROM favorite
+        WHERE user_id = #{userId} AND resource_id = #{resourceId}
+        LIMIT 1
+    </select>
+
+    <!-- ============================================================
+         7. 某用户收藏总数（分页 total）
+         - 联表查 resource，保证只统计「审核通过」的资源
+           （未通过的资源用户不可见，应从收藏列表/总数中排除）
+         - keyword 模糊匹配 resource.title / resource.description
+         - course 精确筛选
+         ============================================================ -->
+    <select id="countMyFavorites" resultType="long">
+        SELECT COUNT(*)
+        FROM favorite f
+        INNER JOIN resource r ON f.resource_id = r.id
+        WHERE f.user_id = #{userId}
+          AND r.review_status = 1
+        <if test="keyword != null and keyword != ''">
+            AND (r.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR r.description LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="course != null and course != ''">
+            AND r.course = #{course}
+        </if>
+    </select>
+
+    <!-- ============================================================
+         8. 某用户收藏的资源列表（分页，按收藏时间倒序）
+         - 联表 favorite f + resource r
+         - 只返回 review_status = 1（已通过）的资源
+         - 按 f.create_time DESC（最新收藏在前）
+         - 返回 Resource 字段（对应 Resource 实体）
+         ============================================================ -->
+    <select id="selectMyFavoritesPage" resultMap="com.qingzhi.demo.mapper.ResourceMapper.BaseResultMap">
+        SELECT <include refid="Resource_Column_List"/>
+        FROM favorite f
+        INNER JOIN resource r ON f.resource_id = r.id
+        WHERE f.user_id = #{userId}
+          AND r.review_status = 1
+        <if test="keyword != null and keyword != ''">
+            AND (r.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR r.description LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="course != null and course != ''">
+            AND r.course = #{course}
+        </if>
+        ORDER BY f.create_time DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+</mapper>

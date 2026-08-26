@@ -121,7 +121,77 @@
     </update>
 
     <!-- ============================================================
-         5. 根据主键删除资源
+         5. 插入新资源（发布资源）
+         - create_time / update_time 自动赋值 NOW()
+         - review_status 默认 0（待审核），download_count 默认 0
+         - useGeneratedKeys 回填 id 到 Resource.id
+         ============================================================ -->
+    <insert id="insert" parameterType="com.qingzhi.demo.entity.Resource"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO resource
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="title != null and title != ''">title,</if>
+            <if test="description != null">description,</if>
+            <if test="course != null and course != ''">course,</if>
+            <if test="uploaderId != null">uploader_id,</if>
+            <if test="fileName != null and fileName != ''">file_name,</if>
+            <if test="filePath != null and filePath != ''">file_path,</if>
+            <if test="fileSize != null">file_size,</if>
+            <if test="fileExt != null">file_ext,</if>
+            <if test="fileHash != null">file_hash,</if>
+            review_status,
+            <if test="rejectReason != null">reject_reason,</if>
+            download_count,
+            create_time,
+            update_time
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="title != null and title != ''">#{title},</if>
+            <if test="description != null">#{description},</if>
+            <if test="course != null and course != ''">#{course},</if>
+            <if test="uploaderId != null">#{uploaderId},</if>
+            <if test="fileName != null and fileName != ''">#{fileName},</if>
+            <if test="filePath != null and filePath != ''">#{filePath},</if>
+            <if test="fileSize != null">#{fileSize},</if>
+            <if test="fileExt != null">#{fileExt},</if>
+            <if test="fileHash != null">#{fileHash},</if>
+            COALESCE(#{reviewStatus}, 0),
+            <if test="rejectReason != null">#{rejectReason},</if>
+            COALESCE(#{downloadCount}, 0),
+            COALESCE(#{createTime}, NOW()),
+            COALESCE(#{updateTime}, NOW())
+        </trim>
+    </insert>
+
+    <!-- ============================================================
+         6. 根据主键动态更新资源（修改资源）
+         - 只更新非空字段，空值不覆盖原值
+         - update_time 强制刷新为 NOW()
+         - 注意：修改通过的资源后，review_status 应由 Service 层显式
+           传入 0（待审核），触发重新审核
+         ============================================================ -->
+    <update id="updateById" parameterType="com.qingzhi.demo.entity.Resource">
+        UPDATE resource
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="title != null and title != ''">title = #{title},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="course != null and course != ''">course = #{course},</if>
+            <if test="uploaderId != null">uploader_id = #{uploaderId},</if>
+            <if test="fileName != null and fileName != ''">file_name = #{fileName},</if>
+            <if test="filePath != null and filePath != ''">file_path = #{filePath},</if>
+            <if test="fileSize != null">file_size = #{fileSize},</if>
+            <if test="fileExt != null">file_ext = #{fileExt},</if>
+            <if test="fileHash != null">file_hash = #{fileHash},</if>
+            <if test="reviewStatus != null">review_status = #{reviewStatus},</if>
+            <if test="rejectReason != null">reject_reason = #{rejectReason},</if>
+            <if test="downloadCount != null">download_count = #{downloadCount},</if>
+            update_time = NOW()
+        </trim>
+        WHERE id = #{id}
+    </update>
+
+    <!-- ============================================================
+         7. 根据主键删除资源
          ============================================================ -->
     <delete id="deleteById" parameterType="long">
         DELETE FROM resource WHERE id = #{id}

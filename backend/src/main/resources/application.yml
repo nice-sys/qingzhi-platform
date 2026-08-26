@@ -9,10 +9,19 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
+      enabled: true
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.qingzhi.entity
+  type-aliases-package: com.qingzhi.demo.entity
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# ============================================================
+# 青知共享平台 - 自定义配置
+# ============================================================
+qingzhi:
+  upload:
+    # 文件本地存储根目录（建议使用绝对路径；相对路径则相对于项目启动目录下的 ./uploads）
+    base-dir: ./uploads

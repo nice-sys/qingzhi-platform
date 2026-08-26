@@ -49,7 +49,16 @@ public enum ResponseCodeEnum {
     FILE_TYPE_NOT_SUPPORTED(5002, "文件格式不支持"),
 
     /** 上传频率超限：每分钟上传超过 5 个文件 */
-    UPLOAD_RATE_LIMITED(5003, "上传频率超限，请稍后再试");
+    UPLOAD_RATE_LIMITED(5003, "上传频率超限，请稍后再试"),
+
+    /** 参数错误：请求参数为空或非法 */
+    PARAM_ERROR(2, "参数错误"),
+
+    /** 用户不存在：查询或操作的用户ID无效 */
+    USER_NOT_EXIST(2005, "用户不存在"),
+
+    /** 账号已存在（别名：同 ACCOUNT_ALREADY_EXISTS，方便管理员创建用户时语义化使用） */
+    USERNAME_EXIST(2001, "账号已存在");
 
     /** 状态码：1 表示成功，其他表示失败 */
     private final int code;
