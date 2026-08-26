@@ -1,11 +1,11 @@
 package com.qingzhi.demo.controller;
 
-import com.qingzhi.demo.common.Constants;
 import com.qingzhi.demo.common.PageResult;
 import com.qingzhi.demo.common.Result;
 import com.qingzhi.demo.entity.Resource;
 import com.qingzhi.demo.enums.ResponseCodeEnum;
 import com.qingzhi.demo.exception.BusinessException;
+import com.qingzhi.demo.interceptor.JwtInterceptor;
 import com.qingzhi.demo.service.FavoriteService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
@@ -16,7 +16,8 @@ import java.util.Map;
 /**
  * 收藏模块控制器
  * <p>对应 PRD 2.2.3 普通用户自用 - 我的收藏。
- * <p>接口前缀 /api/favorite，需登录（已在 WebConfig 注册 JwtInterceptor）。</p>
+ * <p>接口前缀 /api/favorite，需登录（已在 WebConfig 注册 JwtInterceptor）。
+ * <p>所有当前用户信息统一通过 JwtInterceptor.getXxx() 静态方法获取。</p>
  */
 @RestController
 @RequestMapping("/api/favorite")
@@ -38,13 +39,13 @@ public class FavoriteController {
     @PostMapping("/add")
     public Result<Map<String, Object>> add(@RequestBody Map<String, Long> body,
                                            HttpServletRequest request) {
-        Long userId = (Long) request.getAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ID);
+        Long userId = JwtInterceptor.getCurrentUserId(request);
         BusinessException.throwIfNull(userId, ResponseCodeEnum.UNAUTHORIZED);
         Long resourceId = body != null ? body.get("resourceId") : null;
         BusinessException.throwIfNull(resourceId,
                 ResponseCodeEnum.RESOURCE_NOT_FOUND, "resourceId 不能为空");
 
-        String userRole = (String) request.getAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ROLE);
+        Integer userRole = JwtInterceptor.getCurrentUserRole(request);
         Map<String, Object> data = favoriteService.favorite(userId, resourceId, userRole);
         return Result.success(data);
     }
@@ -59,7 +60,7 @@ public class FavoriteController {
     @PostMapping("/remove")
     public Result<Map<String, Object>> remove(@RequestBody Map<String, Long> body,
                                               HttpServletRequest request) {
-        Long userId = (Long) request.getAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ID);
+        Long userId = JwtInterceptor.getCurrentUserId(request);
         BusinessException.throwIfNull(userId, ResponseCodeEnum.UNAUTHORIZED);
         Long resourceId = body != null ? body.get("resourceId") : null;
         BusinessException.throwIfNull(resourceId,
@@ -81,7 +82,7 @@ public class FavoriteController {
     public Result<Map<String, Object>> check(
             @RequestParam("resourceId") Long resourceId,
             HttpServletRequest request) {
-        Long userId = (Long) request.getAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ID);
+        Long userId = JwtInterceptor.getCurrentUserId(request);
         BusinessException.throwIfNull(userId, ResponseCodeEnum.UNAUTHORIZED);
 
         boolean favorited = favoriteService.isFavorited(userId, resourceId);
@@ -106,7 +107,7 @@ public class FavoriteController {
             @RequestParam(value = "pageSize", required = false) Integer pageSize,
             HttpServletRequest request) {
 
-        Long userId = (Long) request.getAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ID);
+        Long userId = JwtInterceptor.getCurrentUserId(request);
         BusinessException.throwIfNull(userId, ResponseCodeEnum.UNAUTHORIZED);
 
         PageResult<Resource> page = favoriteService.listMyFavorites(

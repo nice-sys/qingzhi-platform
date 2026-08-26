@@ -11,6 +11,7 @@ import com.qingzhi.demo.dto.response.ExcelUserRow;
 import com.qingzhi.demo.dto.response.ImportResultResponse;
 import com.qingzhi.demo.dto.response.ResourceInfoResponse;
 import com.qingzhi.demo.dto.response.UserInfoResponse;
+import com.qingzhi.demo.entity.FileStorage;
 import com.qingzhi.demo.entity.Resource;
 import com.qingzhi.demo.entity.User;
 import com.qingzhi.demo.enums.ResponseCodeEnum;
@@ -20,6 +21,7 @@ import com.qingzhi.demo.exception.BusinessException;
 import com.qingzhi.demo.mapper.ResourceMapper;
 import com.qingzhi.demo.mapper.UserMapper;
 import com.qingzhi.demo.service.AdminService;
+import com.qingzhi.demo.service.FileService;
 import com.qingzhi.demo.utils.ExcelUtil;
 import com.qingzhi.demo.utils.PasswordUtil;
 import com.qingzhi.demo.utils.PermissionUtil;
@@ -45,11 +47,14 @@ public class AdminServiceImpl implements AdminService {
 
     private final UserMapper userMapper;
     private final ResourceMapper resourceMapper;
+    private final FileService fileService;
 
     @Autowired
-    public AdminServiceImpl(UserMapper userMapper, ResourceMapper resourceMapper) {
+    public AdminServiceImpl(UserMapper userMapper, ResourceMapper resourceMapper,
+                            FileService fileService) {
         this.userMapper = userMapper;
         this.resourceMapper = resourceMapper;
+        this.fileService = fileService;
     }
 
     /* ====================================================================================
@@ -407,6 +412,14 @@ public class AdminServiceImpl implements AdminService {
         BusinessException.throwIf(r == null, ResponseCodeEnum.FAILURE, "资源不存在");
         int rows = resourceMapper.deleteById(resourceId);
         BusinessException.throwIf(rows != 1, ResponseCodeEnum.FAILURE, "删除资源失败");
+
+        // 释放文件引用（引用计数 -1；归零则删盘 + 删 file_storage 记录）
+        if (r.getFileHash() != null && !r.getFileHash().isEmpty()) {
+            FileStorage storage = fileService.getFileStorageByHash(r.getFileHash());
+            if (storage != null) {
+                fileService.releaseReference(storage.getId());
+            }
+        }
     }
 
     /* ====================================================================================

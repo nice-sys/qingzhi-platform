@@ -6,6 +6,7 @@ import com.qingzhi.demo.common.Result;
 import com.qingzhi.demo.entity.FileStorage;
 import com.qingzhi.demo.enums.ResponseCodeEnum;
 import com.qingzhi.demo.exception.BusinessException;
+import com.qingzhi.demo.interceptor.JwtInterceptor;
 import com.qingzhi.demo.service.FileService;
 import com.qingzhi.demo.utils.FileUtil;
 import org.slf4j.Logger;
@@ -56,7 +57,8 @@ public class FileController {
             maxRequests = Constants.FILE_UPLOAD_RATE_LIMIT)
     public Result<Map<String, Object>> upload(@RequestParam("file") MultipartFile file,
                                               HttpServletRequest request) {
-        Long uploaderId = (Long) request.getAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ID);
+        Long uploaderId = JwtInterceptor.getCurrentUserId(request);
+        BusinessException.throwIfNull(uploaderId, ResponseCodeEnum.UNAUTHORIZED);
         Map<String, Object> uploadResult = fileService.uploadFile(file, uploaderId);
         return Result.success(uploadResult);
     }
@@ -72,7 +74,7 @@ public class FileController {
     public ResponseEntity<Resource> download(@PathVariable("id") Long id,
                                              HttpServletRequest request) {
         // 1. 登录态校验（JwtInterceptor 已注入当前用户，但这里兜底校验，防止匿名访问下载接口）
-        Long currentUserId = (Long) request.getAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ID);
+        Long currentUserId = JwtInterceptor.getCurrentUserId(request);
         BusinessException.throwIf(currentUserId == null,
                 ResponseCodeEnum.UNAUTHORIZED);
 

@@ -44,7 +44,7 @@ public class FavoriteServiceImpl implements FavoriteService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> favorite(Long userId, Long resourceId, String userRole) {
+    public Map<String, Object> favorite(Long userId, Long resourceId, Integer userRole) {
         // 1. 基础参数校验
         BusinessException.throwIfNull(userId, ResponseCodeEnum.UNAUTHORIZED);
         BusinessException.throwIfNull(resourceId, ResponseCodeEnum.RESOURCE_NOT_FOUND, "资源ID不能为空");
@@ -146,14 +146,14 @@ public class FavoriteServiceImpl implements FavoriteService {
      *   <li>待审核(0) / 已拒绝(2) → 仅上传者本人 或 管理员可见</li>
      * </ul>
      */
-    private void assertResourceVisibleToUser(Resource res, Long viewerId, String viewerRole) {
+    private void assertResourceVisibleToUser(Resource res, Long viewerId, Integer viewerRole) {
         Integer status = res.getReviewStatus();
         if (ReviewStatusEnum.APPROVED.getCode() == (status == null ? -1 : status)) {
             return; // 已通过 → 可见
         }
         // 未通过
         boolean isOwner = viewerId != null && viewerId.equals(res.getUploaderId());
-        boolean isAdmin = viewerRole != null && RoleEnum.ADMIN.getCode().equals(viewerRole);
+        boolean isAdmin = viewerRole != null && RoleEnum.ADMIN.getCode() == viewerRole;
         if (!isOwner && !isAdmin) {
             BusinessException.throwOf(ResponseCodeEnum.PERMISSION_DENIED,
                     "资源尚未通过审核，无法收藏");

@@ -1,0 +1,64 @@
+/* ============================================================
+ * 青知共享平台 - 设计变量（品牌色 + 语义色）
+ * ============================================================ */
+:root {
+  /* 品牌色：青绿系（"青知"） */
+  --qz-primary: #2f7a6b;
+  --qz-primary-hover: #388e7e;
+  --qz-primary-active: #266257;
+  --qz-primary-light-1: rgba(47, 122, 107, 0.08);
+  --qz-primary-light-2: rgba(47, 122, 107, 0.18);
+
+  /* 语义色 */
+  --qz-success: #52c41a;
+  --qz-warning: #faad14;
+  --qz-danger:  #f56c6c;
+  --qz-info:    #909399;
+
+  /* 审核状态色（PRD 0待审/1通过/2拒绝） */
+  --qz-review-pending:  #faad14;
+  --qz-review-approved: #52c41a;
+  --qz-review-rejected: #f56c6c;
+
+  /* 角色色：0管理员/1教师/2学生 */
+  --qz-role-admin:   #722ed1;
+  --qz-role-teacher: #1890ff;
+  --qz-role-student: #2f7a6b;
+
+  /* 文本 / 背景 / 边框 */
+  --qz-text-primary:   #1f2937;
+  --qz-text-regular:   #4b5563;
+  --qz-text-secondary: #6b7280;
+  --qz-text-placeholder: #9ca3af;
+
+  --qz-bg-page:     #f5f7fa;
+  --qz-bg-card:     #ffffff;
+  --qz-bg-hover:    #f0f2f5;
+  --qz-bg-sidebar:  #1f2d3d;
+
+  --qz-border:      #e4e7ed;
+  --qz-border-light:#f0f2f5;
+
+  /* 尺寸 */
+  --qz-header-h:   60px;
+  --qz-sidebar-w:  220px;
+  --qz-radius-s:   4px;
+  --qz-radius-m:   8px;
+  --qz-radius-l:   12px;
+
+  /* 阴影 */
+  --qz-shadow-card: 0 2px 12px 0 rgba(0, 0, 0, 0.06);
+  --qz-shadow-hover: 0 6px 20px 0 rgba(0, 0, 0, 0.1);
+
+  /* 覆写 Element Plus 主色（与品牌色一致） */
+  --el-color-primary: var(--qz-primary);
+  --el-color-primary-light-3: #5aa093;
+  --el-color-primary-light-5: #89bfb4;
+  --el-color-primary-light-7: #b8ddd5;
+  --el-color-primary-light-8: #d0e9e3;
+  --el-color-primary-light-9: #e7f4f1;
+  --el-color-primary-dark-2:  #255f54;
+
+  --el-border-radius-base: var(--qz-radius-s);
+  --el-font-size-base: 14px;
+}

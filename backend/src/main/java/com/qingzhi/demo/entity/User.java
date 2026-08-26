@@ -54,6 +54,11 @@ public class User implements Serializable {
     private String major;
 
     /**
+     * 头像URL（VARCHAR）
+     */
+    private String avatarUrl;
+
+    /**
      * 角色编码（TINYINT）：0-管理员, 1-教师, 2-学生
      * <p>对应 {@link RoleEnum}</p>
      */
@@ -211,6 +216,14 @@ public class User implements Serializable {
 
     public void setMajor(String major) {
         this.major = major;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public Integer getRole() {

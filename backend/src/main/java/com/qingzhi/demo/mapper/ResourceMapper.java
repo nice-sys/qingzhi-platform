@@ -68,4 +68,13 @@ public interface ResourceMapper {
      * 根据主键删除资源（管理员 / 用户删除自己的资源共用）
      */
     int deleteById(@Param("id") Long id);
+
+    /**
+     * 下载量 +1（原子自增）
+     * <p>对应 PRD 4.2 字段 resource.download_count：每次成功下载后自增，避免并发下丢失更新。
+     *
+     * @param id 资源ID
+     * @return 影响行数（资源不存在返回 0，成功返回 1）
+     */
+    int incrementDownloadCount(@Param("id") Long id);
 }

@@ -1,7 +1,9 @@
 package com.qingzhi.demo.service;
 
 import com.qingzhi.demo.dto.request.PasswordResetRequest;
+import com.qingzhi.demo.dto.request.UserProfileUpdateRequest;
 import com.qingzhi.demo.dto.response.UserInfoResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 用户业务接口
@@ -33,4 +35,26 @@ public interface UserService {
      * @param request 修改密码请求（oldPassword + newPassword + confirmNewPassword）
      */
     void changePassword(Long userId, PasswordResetRequest request);
+
+    /**
+     * 修改/补充当前登录用户的个人信息（PRD 2.2.3）
+     * <p>支持字段：name / phone / email / department / major（均可选；为 null 则不更新该列）。
+     * <p>更新后返回最新的 UserInfoResponse（与 getUserInfo 格式一致，前端直接替换视图）。
+     *
+     * @param userId  当前登录用户ID
+     * @param request 修改请求（仅非空字段参与更新，格式校验已在 Controller @Valid 完成）
+     * @return 修改后的最新个人信息
+     */
+    UserInfoResponse updateProfile(Long userId, UserProfileUpdateRequest request);
+
+    /**
+     * 更新当前登录用户的头像
+     * <p>内部复用 FileService.uploadFile，将图片文件保存到文件存储（支持秒传），
+     * 然后将返回的 fileStorageId 拼成 /api/file/download/{id} 作为 avatar_url。
+     *
+     * @param userId 当前登录用户ID
+     * @param file   上传的图片文件（MultipartFile）
+     * @return 修改后的最新个人信息（含 avatarUrl）
+     */
+    UserInfoResponse updateAvatar(Long userId, MultipartFile file);
 }

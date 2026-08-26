@@ -18,10 +18,10 @@ public interface FavoriteService {
      *
      * @param userId     当前用户ID
      * @param resourceId 要收藏的资源ID
-     * @param userRole   当前用户角色（管理员/普通用户）
+     * @param userRole   当前用户角色编码（Integer，管理员/普通用户）
      * @return Map：{ favorited: boolean（本次是否发生新增收藏）, existed: boolean（调用前是否已收藏） }
      */
-    Map<String, Object> favorite(Long userId, Long resourceId, String userRole);
+    Map<String, Object> favorite(Long userId, Long resourceId, Integer userRole);
 
     /**
      * 取消收藏

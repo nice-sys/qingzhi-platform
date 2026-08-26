@@ -197,4 +197,15 @@
         DELETE FROM resource WHERE id = #{id}
     </delete>
 
+    <!-- ============================================================
+         8. 下载量原子自增 +1（避免并发丢失更新）
+         - 同时 update_time 不强制刷新（不打扰资源真实最后更新时间）
+           如果要记录"最后下载时间"可以加列，这里 PRD 没要求。
+         ============================================================ -->
+    <update id="incrementDownloadCount" parameterType="long">
+        UPDATE resource
+        SET download_count = COALESCE(download_count, 0) + 1
+        WHERE id = #{id}
+    </update>
+
 </mapper>

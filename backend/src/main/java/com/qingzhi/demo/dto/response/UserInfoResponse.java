@@ -48,6 +48,11 @@ public class UserInfoResponse implements Serializable {
     private String major;
 
     /**
+     * 头像URL
+     */
+    private String avatarUrl;
+
+    /**
      * 角色编码：0-管理员, 1-教师, 2-学生
      */
     private Integer role;
@@ -83,6 +88,7 @@ public class UserInfoResponse implements Serializable {
         resp.setEmail(user.getEmail());
         resp.setDepartment(user.getDepartment());
         resp.setMajor(user.getMajor());
+        resp.setAvatarUrl(user.getAvatarUrl());
         resp.setRole(user.getRole());
         resp.setStatus(user.getStatus());
 
@@ -147,6 +153,14 @@ public class UserInfoResponse implements Serializable {
 
     public void setMajor(String major) {
         this.major = major;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public Integer getRole() {

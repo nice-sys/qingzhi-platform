@@ -242,7 +242,7 @@ public class ResourceServiceImpl implements ResourceService {
      * ==================================================================================== */
 
     @Override
-    public Resource getResourceDetail(Long resourceId, Long viewerId, String viewerRole) {
+    public Resource getResourceDetail(Long resourceId, Long viewerId, Integer viewerRole) {
         BusinessException.throwIfNull(resourceId,
                 ResponseCodeEnum.RESOURCE_NOT_FOUND, "资源ID不能为空");
 
@@ -260,7 +260,7 @@ public class ResourceServiceImpl implements ResourceService {
         if (viewerId != null && viewerId.equals(res.getUploaderId())) {
             return res;
         }
-        if (viewerRole != null && RoleEnum.ADMIN.getCode().equals(viewerRole)) {
+        if (viewerRole != null && RoleEnum.ADMIN.getCode() == viewerRole) {
             return res;
         }
 
@@ -309,6 +309,36 @@ public class ResourceServiceImpl implements ResourceService {
                 offset,
                 pageSize);
         return PageResult.of(records == null ? Collections.emptyList() : records, pageNum, pageSize, total);
+    }
+
+    /* ====================================================================================
+     * 七、下载资源（可见性校验 + 原子自增下载计数）
+     * ==================================================================================== */
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Resource downloadResource(Long resourceId, Long viewerId, Integer viewerRole) {
+        // 1. 校验权限 & 加载资源（与 getResourceDetail 同可见性规则 + 同异常）
+        Resource res = getResourceDetail(resourceId, viewerId, viewerRole);
+
+        // 2. 校验文件路径非空（防止 DB 脏数据或未发布成功的资源被直接下载）
+        BusinessException.throwIfBlank(res.getFilePath(),
+                ResponseCodeEnum.FILE_NOT_FOUND, "该资源尚未上传文件，无法下载");
+        BusinessException.throwIfBlank(res.getFileName(),
+                ResponseCodeEnum.FILE_NOT_FOUND, "资源文件名缺失，请联系管理员");
+
+        // 3. 原子自增 download_count（行锁避免并发丢失更新）
+        int rows = resourceMapper.incrementDownloadCount(resourceId);
+        BusinessException.throwIf(rows <= 0,
+                ResponseCodeEnum.FAILURE, "下载失败，请稍后重试");
+
+        // 4. 将 DB 中的值同步 +1，返回给 Controller（即便 Controller 用不到，也保持 entity 一致性）
+        Integer old = res.getDownloadCount() == null ? 0 : res.getDownloadCount();
+        res.setDownloadCount(old + 1);
+
+        log.info("资源下载成功：resourceId={}, viewerId={}, newDownloadCount={}",
+                resourceId, viewerId, res.getDownloadCount());
+        return res;
     }
 
     /* ====================================================================================

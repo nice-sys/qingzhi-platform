@@ -1,0 +1,25 @@
+{
+  "name": "qingzhi-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "青知共享平台 - Vue 3 前端（资源共享 / 审核 / 收藏）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5",
+    "pinia": "^2.2.6",
+    "axios": "^1.7.9",
+    "element-plus": "^2.8.8",
+    "@element-plus/icons-vue": "^2.3.1",
+    "dayjs": "^1.11.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "vite": "^5.4.11"
+  }
+}

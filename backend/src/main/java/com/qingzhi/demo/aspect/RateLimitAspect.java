@@ -76,7 +76,7 @@ public class RateLimitAspect {
         switch (dimension) {
             case USER:
                 Long userId = request != null
-                        ? (Long) request.getAttribute(Constants.CURRENT_USER_ID)
+                        ? (Long) request.getAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ID)
                         : null;
                 // 未登录兜底 IP（若业务要求未登录禁止上传，Controller 层会提前拦截）
                 return "USER_" + (userId != null ? userId : "ANON_" + getClientIp(request));

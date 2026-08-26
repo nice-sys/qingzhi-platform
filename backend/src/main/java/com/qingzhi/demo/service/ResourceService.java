@@ -11,7 +11,6 @@ import java.time.LocalDate;
  * <p>管理员侧的审核/全局删除接口在 AdminService 中实现。</p>
  */
 public interface ResourceService {
-
     /* ====================================================================================
      * 一、写操作（需登录 + 校验）
      * ==================================================================================== */
@@ -74,10 +73,10 @@ public interface ResourceService {
      *
      * @param resourceId 资源ID
      * @param viewerId   当前查看人ID（未登录传 null；传 null 则拒绝访问非已通过资源）
-     * @param viewerRole 当前查看人角色（用于管理员可见判断；未登录传 null）
+     * @param viewerRole 当前查看人角色编码（Integer，用于管理员可见判断；未登录传 null）
      * @return Resource 实体；未找到返回 null（Service 层已做可见性判断）
      */
-    Resource getResourceDetail(Long resourceId, Long viewerId, String viewerRole);
+    Resource getResourceDetail(Long resourceId, Long viewerId, Integer viewerRole);
 
     /**
      * 我的资源列表（PRD 2.2.3 普通用户自用）
@@ -96,4 +95,23 @@ public interface ResourceService {
                                          String keyword, String course, Integer reviewStatus,
                                          LocalDate startDate, LocalDate endDate,
                                          Integer pageNum, Integer pageSize);
+
+    /* ====================================================================================
+     * 三、下载资源（PRD 2.3.4 资源详情 → 点击下载）
+     * ==================================================================================== */
+
+    /**
+     * 执行「下载资源」全流程（PRD 2.3.4）：
+     * <ol>
+     *   <li>可见性校验（与详情同规则）</li>
+     *   <li>原子自增 download_count（数据库行锁避免并发丢失更新）</li>
+     *   <li>返回 Resource 实体，Controller 取 file_name/file_path 组装流式下载响应</li>
+     * </ol>
+     *
+     * @param resourceId 资源ID
+     * @param viewerId   当前用户ID（必须登录）
+     * @param viewerRole 当前用户角色编码（Integer，用于管理员可见未通过资源）
+     * @return Resource（含 file_name / file_path / file_size 等文件信息）
+     */
+    Resource downloadResource(Long resourceId, Long viewerId, Integer viewerRole);
 }
