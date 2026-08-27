@@ -195,6 +195,11 @@ const editingId = computed(() => Number(route.params.id) || 0)
 
 const form = reactive({
   fileStorageId: 0,
+  fileName: '',
+  filePath: '',
+  fileSize: 0,
+  fileExt: '',
+  fileHash: '',
   title: '',
   course: '',
   description: '',
@@ -226,19 +231,40 @@ function onTagsChange(list) {
 }
 function onFileOk(data) {
   if (!data) return
-  form.fileStorageId = data.fileStorageId || data.storageId || data.id || 0
-  const name = data.originalName || data.name || ''
-  fileInfo.name = name
-  fileInfo.size = data.fileSize || 0
+  const sid = Number(data.fileStorageId || data.storageId || data.id || 0)
+  form.fileStorageId = sid > 0 ? sid : 0
+  // ⚠️ 关键：把 uploadFile 返回的 6 个文件字段同步写入 form
+  // 这样后端 publishResource 无需走 fileStorageId 回填分支，避免 DB 无 original_file_name 列的限制
+  form.fileName = data.fileName || data.originalName || data.name || ''
+  form.filePath = data.filePath || data.storagePath || data.path || ''
+  form.fileSize = Number(data.fileSize || 0)
+  form.fileExt  = data.fileExt || data.ext || parseFileExt(form.fileName)
+  form.fileHash = data.fileHash || ''
+  // 显示用 fileInfo
+  fileInfo.name = form.fileName
+  fileInfo.size = form.fileSize
   fileInfo.quick = !!data.quickUpload || !!data.hitQuickUpload
-  const type = data.type || resolveTypeByFilename(name)
+  const type = data.type || resolveTypeByFilename(form.fileName)
   fileInfo.type = type
   fileInfo.typeLabel = RESOURCE_TYPE_LABEL[type] || RESOURCE_TYPE_LABEL.other
   fileInfo.icon = TYPE_ICON[type] || TYPE_ICON.other
+  // 没拿到合法 fileStorageId 直接报提示，避免用户继续填完标题后才发现没上传成功
+  if (form.fileStorageId <= 0) {
+    ElMessage.warning('文件上传返回数据异常，未关联到文件，请重新选择文件上传')
+  }
   saveDraft(true)
+}
+function parseFileExt(name) {
+  if (!name || !name.includes('.')) return ''
+  return name.split('.').pop().toLowerCase()
 }
 function onFileRm() {
   form.fileStorageId = 0
+  form.fileName = ''
+  form.filePath = ''
+  form.fileSize = 0
+  form.fileExt = ''
+  form.fileHash = ''
   fileInfo.name = ''
   fileInfo.size = 0
   fileInfo.quick = false
@@ -323,12 +349,17 @@ async function loadServerDraft(id) {
     form.description = d.description || ''
     form.tags = d.tags || ''
     form.fileStorageId = Number(d.fileStorageId) || 0
+    // ⚠️ 回填 6 个文件字段到 form（与 onFileOk 一致）
+    form.fileName = d.fileName || ''
+    form.filePath = d.filePath || ''
+    form.fileSize = Number(d.fileSize || 0)
+    form.fileExt  = d.fileExt  || parseFileExt(form.fileName)
+    form.fileHash = d.fileHash || ''
     tags.value = (form.tags || '').split(',').filter(Boolean).slice(0, MAX_TAGS)
-    if (form.fileStorageId > 0) {
-      const name = d.fileName || ''
-      fileInfo.name = name
-      fileInfo.size = d.fileSize || 0
-      const t = d.type || resolveTypeByFilename(name)
+    if (form.fileStorageId > 0 || form.fileName) {
+      fileInfo.name = form.fileName
+      fileInfo.size = form.fileSize
+      const t = resolveTypeByFilename(form.fileName)
       fileInfo.type = t
       fileInfo.typeLabel = RESOURCE_TYPE_LABEL[t] || RESOURCE_TYPE_LABEL.other
       fileInfo.icon = TYPE_ICON[t] || TYPE_ICON.other
@@ -409,13 +440,18 @@ async function loadEditing() {
     form.description = d.description || ''
     form.tags = d.tags || ''
     tags.value = (form.tags || '').split(',').filter(Boolean).slice(0, MAX_TAGS)
-    const fsId = d.fileStorageId || d.storageId || d.id
-    if (fsId && Number(fsId) > 0) {
-      form.fileStorageId = Number(fsId)
-      const name = d.originalName || d.fileName || ''
-      fileInfo.name = name
-      fileInfo.size = d.fileSize || 0
-      const t = d.type || resolveTypeByFilename(name)
+    const fsId = Number(d.fileStorageId || d.storageId || d.id || 0)
+    // ⚠️ 回填 6 个文件字段到 form（与 onFileOk 一致）
+    form.fileStorageId = fsId > 0 ? fsId : 0
+    form.fileName = d.originalName || d.fileName || ''
+    form.filePath = d.filePath || d.storagePath || ''
+    form.fileSize = Number(d.fileSize || 0)
+    form.fileExt  = d.fileExt  || parseFileExt(form.fileName)
+    form.fileHash = d.fileHash || ''
+    if (form.fileStorageId > 0 || form.fileName) {
+      fileInfo.name = form.fileName
+      fileInfo.size = form.fileSize
+      const t = d.type || resolveTypeByFilename(form.fileName)
       fileInfo.type = t
       fileInfo.typeLabel = RESOURCE_TYPE_LABEL[t] || RESOURCE_TYPE_LABEL.other
       fileInfo.icon = TYPE_ICON[t] || TYPE_ICON.other

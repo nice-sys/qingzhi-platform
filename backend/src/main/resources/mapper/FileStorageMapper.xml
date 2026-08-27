@@ -12,6 +12,8 @@
          file_size BIGINT
          reference_count INT NOT NULL DEFAULT 1
          create_time DATETIME NOT NULL
+         ⚠️ 注意：DB 实际不含 original_file_name / file_ext 两列（原始文件名通过 resource.file_name 保存），
+         此处切勿随意添加列，否则会导致 INSERT/SELECT Unknown column 异常
          ============================================================ -->
     <resultMap id="BaseResultMap" type="com.qingzhi.demo.entity.FileStorage">
         <id     column="id"              property="id"             />
@@ -51,6 +53,7 @@
          - create_time 默认 NOW()
          - reference_count 默认 1
          - useGeneratedKeys 回填主键到 storage.id
+         - ⚠️ DB 无 original_file_name / file_ext 列，勿加
          ============================================================ -->
     <insert id="insert" parameterType="com.qingzhi.demo.entity.FileStorage"
             useGeneratedKeys="true" keyProperty="id">

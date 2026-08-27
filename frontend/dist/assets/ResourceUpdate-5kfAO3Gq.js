@@ -1,0 +1,1 @@
+import r from"./ResourcePublish-C36p6Kl-.js";import{L as o,O as t}from"./vue-D7PUWxO5.js";import"./element-plus-C-xzIxrl.js";import"./request-BBiOOWI-.js";import"./index-SYtHpKmV.js";import"./format-BqZd18u0.js";import"./resource-DXbgPnk2.js";import"./constants-Ck97-IgQ.js";const l={__name:"ResourceUpdate",setup(e){return(p,m)=>(o(),t(r))}};export{l as default};

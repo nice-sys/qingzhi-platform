@@ -67,13 +67,14 @@ public class ResourceServiceImpl implements ResourceService {
                 "课程名称长度不能超过 " + Constants.COURSE_MAX_LENGTH);
 
         // 2. 文件信息补全（支持两种方式：A.传 fileStorageId，B.前端已传 fileName/filePath/fileSize/fileExt/fileHash）
-        // 只要 filePath 或 fileName 任一个为空，且 fileStorageId 有值，就用 fileStorageId 查 FileStorage 表回填
+        // 只要 filePath 或 fileName 任一个为空，且 fileStorageId 有值且 > 0，就用 fileStorageId 查 FileStorage 表回填
+        Long storageId = resourceDto.getFileStorageId();
         if ((!StringUtils.hasText(resourceDto.getFilePath())
                 || !StringUtils.hasText(resourceDto.getFileName()))
-                && resourceDto.getFileStorageId() != null) {
-            FileStorage fs = fileService.getFileStorageById(resourceDto.getFileStorageId());
+                && storageId != null && storageId > 0) {
+            FileStorage fs = fileService.getFileStorageById(storageId);
             BusinessException.throwIfNull(fs, ResponseCodeEnum.FILE_NOT_FOUND,
-                    "关联的文件不存在(fileStorageId=" + resourceDto.getFileStorageId() + ")");
+                    "关联的文件不存在(fileStorageId=" + storageId + ")");
             // 回填 6 个文件字段
             if (!StringUtils.hasText(resourceDto.getFileName())) {
                 resourceDto.setFileName(fs.getOriginalFileName());
@@ -445,11 +446,12 @@ public class ResourceServiceImpl implements ResourceService {
     public Long saveDraft(Resource body, Long operatorId) {
         BusinessException.throwIfNull(operatorId, ResponseCodeEnum.UNAUTHORIZED);
 
-        // 1. 如果传了 fileStorageId，同样回填文件 6 字段（与 publishResource 相同逻辑，但不强制）
+        // 1. 如果传了 fileStorageId（有效且 > 0），同样回填文件 6 字段（与 publishResource 相同逻辑，但不强制）
+        Long sId = body == null ? null : body.getFileStorageId();
         if (body != null
-                && body.getFileStorageId() != null
+                && sId != null && sId > 0
                 && (!StringUtils.hasText(body.getFilePath()) || !StringUtils.hasText(body.getFileName()))) {
-            FileStorage fs = fileService.getFileStorageById(body.getFileStorageId());
+            FileStorage fs = fileService.getFileStorageById(sId);
             if (fs != null) {
                 if (!StringUtils.hasText(body.getFileName())) body.setFileName(fs.getOriginalFileName());
                 if (!StringUtils.hasText(body.getFilePath())) body.setFilePath(fs.getFilePath());

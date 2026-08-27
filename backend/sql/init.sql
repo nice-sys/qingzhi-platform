@@ -34,7 +34,7 @@ SET SESSION collation_server         = utf8mb4_0900_ai_ci;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- --------------------------------------------------------
--- 0. 创建数据库（如不存在）
+-- 0. 创建数据库
 -- --------------------------------------------------------
 DROP DATABASE IF EXISTS `qingzhi_platform`;
 CREATE DATABASE `qingzhi_platform`
