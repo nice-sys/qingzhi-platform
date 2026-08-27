@@ -137,8 +137,8 @@ async function doRegister() {
   loading.value = true
   try {
     const data = await register({ ...form })
-    // 后端注册成功：直接返回 {token, userInfo} 免登录进系统
-    if (data && (data.token || data.userInfo)) {
+    // 后端注册成功：返回 {token, userInfo}（有 token 才免登录进系统；老版本仅返回 userInfo 时仍走手动登录）
+    if (data && data.token) {
       const { useUserStore } = await import('@/stores/userStore')
       useUserStore().setLoginData(data.token, data.userInfo)
       ElMessage.success('注册成功，欢迎加入青知')

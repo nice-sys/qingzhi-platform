@@ -110,6 +110,12 @@ public class Resource implements Serializable {
      */
     private transient Long fileStorageId;
 
+    /**
+     * 关键词标签（逗号分隔字符串，非持久化辅助字段；前端传入后由业务层拆分持久化——
+     * 若后续 resource 表增加 tags 列则改为持久化字段）
+     */
+    private transient String tags;
+
     public Resource() {
     }
 
@@ -201,4 +207,7 @@ public class Resource implements Serializable {
 
     public Long getFileStorageId() { return fileStorageId; }
     public void setFileStorageId(Long fileStorageId) { this.fileStorageId = fileStorageId; }
+
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
 }

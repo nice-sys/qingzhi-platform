@@ -93,6 +93,39 @@ export function myResources(params = {}) {
 /** 别名：listMyResources(pageQuery) */
 export function listMyResources(params = {}) { return myResources(params) }
 
+/**
+ * 保存草稿（新建或更新）
+ * POST /api/resource/draft   body: { id?, ...fields }
+ * 返回：{ draftId }
+ */
+export function saveDraftResource(data = {}) {
+  return request.post('/resource/draft', data)
+}
+
+/**
+ * 我的草稿列表（分页）
+ * GET /api/resource/drafts
+ */
+export function listMyDrafts(params = {}) {
+  return request.get('/resource/drafts', { params: translatePage(params) })
+}
+
+/**
+ * 草稿详情（仅本人）
+ * GET /api/resource/draft/{id}
+ */
+export function getDraft(id) {
+  return request.get(`/resource/draft/${id}`)
+}
+
+/**
+ * 删除草稿（仅本人）
+ * POST /api/resource/draft/delete   body: { id }
+ */
+export function deleteDraft(id) {
+  return request.post('/resource/draft/delete', { id })
+}
+
 export default {
   publishResource,
   updateResource,
@@ -103,5 +136,9 @@ export default {
   resourceDetail,
   downloadResource,
   myResources,
-  listMyResources
+  listMyResources,
+  saveDraftResource,
+  listMyDrafts,
+  getDraft,
+  deleteDraft
 }

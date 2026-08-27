@@ -13,7 +13,10 @@ public enum ReviewStatusEnum {
     APPROVED(1, "已通过"),
 
     /** 已拒绝：管理员审核拒绝，须填写拒绝理由，用户修改后可重新提交 */
-    REJECTED(2, "已拒绝");
+    REJECTED(2, "已拒绝"),
+
+    /** 草稿：用户保存但未提交审核的资源，仅本人可见，不出现在公开列表 */
+    DRAFT(3, "草稿");
 
     private final int code;
     private final String message;

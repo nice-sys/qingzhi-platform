@@ -49,6 +49,9 @@
               <el-dropdown-item command="myres" v-if="!user.isAdmin">
                 <el-icon><Document /></el-icon>&nbsp;我的资源
               </el-dropdown-item>
+              <el-dropdown-item command="drafts" v-if="!user.isAdmin">
+                <el-icon><EditPen /></el-icon>&nbsp;我的草稿
+              </el-dropdown-item>
               <el-dropdown-item divided command="logout">
                 <el-icon><SwitchButton /></el-icon>&nbsp;退出登录
               </el-dropdown-item>
@@ -97,6 +100,7 @@ function onCommand(cmd) {
     case 'info':     router.push('/profile/info'); break
     case 'password': router.push('/profile/password'); break
     case 'myres':    router.push('/profile/resources'); break
+    case 'drafts':   router.push('/profile/drafts'); break
     case 'logout':   doLogout(); break
   }
 }

@@ -42,7 +42,7 @@ public class AuthServiceImpl implements AuthService {
      * ==================================================================================== */
 
     @Override
-    public UserInfoResponse register(RegisterRequest request) {
+    public LoginResponse register(RegisterRequest request) {
 
         // 1. 校验角色：只允许教师(1)/学生(2)自行注册，禁止管理员
         RoleEnum role = request.getRoleEnum();
@@ -74,8 +74,10 @@ public class AuthServiceImpl implements AuthService {
         int rows = userMapper.insert(user);
         BusinessException.throwIf(rows != 1, ResponseCodeEnum.FAILURE, "注册失败，请稍后重试");
 
-        // 8.返回脱敏后的用户信息
-        return UserInfoResponse.fromEntity(user);
+        // 8.注册后自动登录：生成 JWT Token + 脱敏用户信息（与登录成功结构一致）
+        UserInfoResponse userInfo = UserInfoResponse.fromEntity(user);
+        String token = jwtUtil.generateToken(user.getId(), user.getRole(), user.getUsername());
+        return LoginResponse.ofLoginSuccess(token, userInfo);
     }
 
     /* ====================================================================================

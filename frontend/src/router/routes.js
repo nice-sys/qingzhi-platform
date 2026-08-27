@@ -104,6 +104,12 @@ export const routes = [
         name: 'MyFavorites',
         component: () => import('@/views/profile/MyFavorites.vue'),
         meta: { title: '我的收藏', icon: 'StarFilled', roles: [...TEACHER, ...STUDENT] }
+      },
+      {
+        path: 'drafts',
+        name: 'MyDrafts',
+        component: () => import('@/views/profile/DraftList.vue'),
+        meta: { title: '我的草稿', icon: 'EditPen', roles: [...TEACHER, ...STUDENT] }
       }
     ]
   },

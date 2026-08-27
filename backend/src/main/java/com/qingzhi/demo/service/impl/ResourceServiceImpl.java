@@ -435,4 +435,175 @@ public class ResourceServiceImpl implements ResourceService {
             return 0L;
         }
     }
+
+    /* ====================================================================================
+     * 四、草稿箱功能（reviewStatus = DRAFT=3）
+     * ==================================================================================== */
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long saveDraft(Resource body, Long operatorId) {
+        BusinessException.throwIfNull(operatorId, ResponseCodeEnum.UNAUTHORIZED);
+
+        // 1. 如果传了 fileStorageId，同样回填文件 6 字段（与 publishResource 相同逻辑，但不强制）
+        if (body != null
+                && body.getFileStorageId() != null
+                && (!StringUtils.hasText(body.getFilePath()) || !StringUtils.hasText(body.getFileName()))) {
+            FileStorage fs = fileService.getFileStorageById(body.getFileStorageId());
+            if (fs != null) {
+                if (!StringUtils.hasText(body.getFileName())) body.setFileName(fs.getOriginalFileName());
+                if (!StringUtils.hasText(body.getFilePath())) body.setFilePath(fs.getFilePath());
+                if (body.getFileSize() == null) body.setFileSize(fs.getFileSize());
+                if (!StringUtils.hasText(body.getFileExt())) body.setFileExt(fs.getFileExt());
+                if (!StringUtils.hasText(body.getFileHash())) body.setFileHash(fs.getFileHash());
+            }
+        }
+
+        // 2. 字段长度软校验：超长才报错，空内容允许保存
+        if (body != null && body.getTitle() != null) {
+            String t = body.getTitle().trim();
+            BusinessException.throwIf(t.length() > Constants.RESOURCE_TITLE_MAX_LENGTH,
+                    ResponseCodeEnum.PARAM_ERROR, "草稿标题超长");
+            body.setTitle(t);
+        }
+        if (body != null && body.getCourse() != null) {
+            String c = body.getCourse().trim();
+            BusinessException.throwIf(c.length() > Constants.COURSE_MAX_LENGTH,
+                    ResponseCodeEnum.PARAM_ERROR, "草稿分类超长");
+            body.setCourse(c);
+        }
+
+        Long draftId = body == null ? null : body.getId();
+        if (draftId != null) {
+            // 3. 更新草稿：必须是本人草稿 + 状态必须是 DRAFT
+            Resource existing = resourceMapper.selectById(draftId);
+            BusinessException.throwIfNull(existing, ResponseCodeEnum.RESOURCE_NOT_FOUND, "草稿不存在");
+            BusinessException.throwIf(!existing.getUploaderId().equals(operatorId),
+                    ResponseCodeEnum.PERMISSION_DENIED, "只能修改自己的草稿");
+            BusinessException.throwIf(ReviewStatusEnum.DRAFT.getCode() != (existing.getReviewStatus() == null ? -1 : existing.getReviewStatus()),
+                    ResponseCodeEnum.PERMISSION_DENIED, "该资源不是草稿状态，无法通过草稿接口修改");
+
+            Resource update = new Resource();
+            update.setId(draftId);
+            if (body != null) {
+                update.setTitle(body.getTitle());
+                update.setDescription(body.getDescription());
+                update.setCourse(body.getCourse());
+                update.setTags(body.getTags());
+                update.setFileName(body.getFileName());
+                update.setFilePath(body.getFilePath());
+                update.setFileSize(body.getFileSize());
+                update.setFileExt(body.getFileExt());
+                update.setFileHash(body.getFileHash());
+                update.setFileStorageId(body.getFileStorageId());
+            }
+            int rows = resourceMapper.updateById(update);
+            BusinessException.throwIf(rows <= 0, ResponseCodeEnum.FAILURE, "草稿保存失败");
+            log.info("草稿更新成功：draftId={}, operatorId={}", draftId, operatorId);
+            return draftId;
+        } else {
+            // 4. 新建草稿：insert 新记录，reviewStatus=DRAFT
+            Resource insert = new Resource();
+            if (body != null) {
+                insert.setTitle(body.getTitle());
+                insert.setDescription(body.getDescription());
+                insert.setCourse(body.getCourse());
+                insert.setTags(body.getTags());
+                insert.setFileName(body.getFileName());
+                insert.setFilePath(body.getFilePath());
+                insert.setFileSize(body.getFileSize());
+                insert.setFileExt(body.getFileExt());
+                insert.setFileHash(body.getFileHash());
+                insert.setFileStorageId(body.getFileStorageId());
+            }
+            insert.setUploaderId(operatorId);
+            insert.setDownloadCount(0);
+            insert.setReviewStatus(ReviewStatusEnum.DRAFT.getCode());
+            insert.setRejectReason(null);
+            insert.setReviewAdminId(null);
+            insert.setReviewTime(null);
+
+            int rows = resourceMapper.insert(insert);
+            BusinessException.throwIf(rows <= 0 || insert.getId() == null,
+                    ResponseCodeEnum.FAILURE, "草稿保存失败，请重试");
+            log.info("草稿创建成功：draftId={}, uploaderId={}, title={}",
+                    insert.getId(), operatorId, insert.getTitle());
+            return insert.getId();
+        }
+    }
+
+    @Override
+    public PageResult<Resource> listMyDrafts(Long ownerId, String keyword,
+                                             Integer pageNum, Integer pageSize) {
+        BusinessException.throwIfNull(ownerId, ResponseCodeEnum.UNAUTHORIZED);
+        pageNum = normalizePageNum(pageNum);
+        pageSize = normalizePageSize(pageSize);
+
+        // 固定过滤 reviewStatus = DRAFT(3) + uploaderId = ownerId
+        Integer draftStatus = ReviewStatusEnum.DRAFT.getCode();
+        long total = resourceMapper.countResources(
+                normalizeLikeKeyword(keyword),
+                null,
+                draftStatus,
+                ownerId,
+                null,
+                null);
+
+        if (total <= 0) {
+            return PageResult.empty(pageNum, pageSize);
+        }
+
+        int offset = (pageNum - 1) * pageSize;
+        List<Resource> records = resourceMapper.selectResourcesPage(
+                normalizeLikeKeyword(keyword),
+                null,
+                draftStatus,
+                ownerId,
+                null,
+                null,
+                offset,
+                pageSize);
+
+        return PageResult.of(records == null ? Collections.emptyList() : records, pageNum, pageSize, total);
+    }
+
+    @Override
+    public Resource getDraft(Long id, Long operatorId) {
+        BusinessException.throwIfNull(operatorId, ResponseCodeEnum.UNAUTHORIZED);
+        BusinessException.throwIfNull(id, ResponseCodeEnum.RESOURCE_NOT_FOUND, "草稿ID不能为空");
+
+        Resource res = resourceMapper.selectById(id);
+        BusinessException.throwIfNull(res, ResponseCodeEnum.RESOURCE_NOT_FOUND, "草稿不存在");
+        BusinessException.throwIf(ReviewStatusEnum.DRAFT.getCode() != (res.getReviewStatus() == null ? -1 : res.getReviewStatus()),
+                ResponseCodeEnum.PERMISSION_DENIED, "该资源不是草稿");
+        BusinessException.throwIf(!res.getUploaderId().equals(operatorId),
+                ResponseCodeEnum.PERMISSION_DENIED, "只能查看自己的草稿");
+        return res;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteDraft(Long id, Long operatorId) {
+        BusinessException.throwIfNull(operatorId, ResponseCodeEnum.UNAUTHORIZED);
+        BusinessException.throwIfNull(id, ResponseCodeEnum.RESOURCE_NOT_FOUND, "草稿ID不能为空");
+
+        Resource existing = resourceMapper.selectById(id);
+        BusinessException.throwIfNull(existing, ResponseCodeEnum.RESOURCE_NOT_FOUND, "草稿不存在");
+        BusinessException.throwIf(ReviewStatusEnum.DRAFT.getCode() != (existing.getReviewStatus() == null ? -1 : existing.getReviewStatus()),
+                ResponseCodeEnum.PERMISSION_DENIED, "该资源不是草稿，无法通过草稿接口删除");
+        BusinessException.throwIf(!existing.getUploaderId().equals(operatorId),
+                ResponseCodeEnum.PERMISSION_DENIED, "只能删除自己的草稿");
+
+        // 物理删除 + 释放文件引用（与 deleteMyResource 一致）
+        int rows = resourceMapper.deleteById(id);
+        BusinessException.throwIf(rows <= 0, ResponseCodeEnum.FAILURE, "草稿删除失败");
+
+        if (existing.getFileHash() != null && !existing.getFileHash().isEmpty()) {
+            FileStorage storage = fileService.getFileStorageByHash(existing.getFileHash());
+            if (storage != null) {
+                fileService.releaseReference(storage.getId());
+            }
+        }
+        log.info("草稿删除成功：draftId={}, operatorId={}", id, operatorId);
+    }
 }

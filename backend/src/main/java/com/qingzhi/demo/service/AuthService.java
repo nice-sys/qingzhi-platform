@@ -21,12 +21,13 @@ public interface AuthService {
      *   <li>账号查重：学号/工号已存在（含 Excel 已导入）则抛出 2001 "账号已存在，请直接登录"</li>
      *   <li>密码加密：使用 MD5 加密存储</li>
      *   <li>插入用户记录，默认账号状态 0-正常</li>
+     *   <li>生成 JWT Token，注册后自动登录</li>
      * </ol>
      *
      * @param request 注册请求参数
-     * @return 注册成功后的用户信息（已脱敏，不含密码）
+     * @return 注册成功响应（JWT Token + 脱敏用户信息，与登录成功同结构）
      */
-    UserInfoResponse register(RegisterRequest request);
+    LoginResponse register(RegisterRequest request);
 
     /**
      * 用户登录（账号+密码）

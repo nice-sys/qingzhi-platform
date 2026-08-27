@@ -122,4 +122,48 @@ public interface ResourceService {
      *         rejectedCount / downloadTotal / todayDownloadCount 的 Map
      */
     java.util.Map<String, Object> getDashboardStats();
+
+    /* ====================================================================================
+     * 四、草稿箱功能（仅本人可见，reviewStatus = DRAFT=3）
+     * ==================================================================================== */
+
+    /**
+     * 保存草稿（新建或更新）
+     * <p>与 publishResource 不同：不强制校验 title/course/file，允许空内容草稿；
+     * 如果 body.id 非空且是本人草稿则更新，否则 insert 新草稿。
+     *
+     * @param body       草稿内容（id 可选，其余字段全可选）
+     * @param operatorId 当前用户ID（必须是草稿所有者；从 JWT 解析）
+     * @return 草稿 resource.id
+     */
+    Long saveDraft(Resource body, Long operatorId);
+
+    /**
+     * 我的草稿列表（分页，按 updateTime DESC）
+     *
+     * @param ownerId  所有者用户ID（JWT 当前登录人）
+     * @param keyword  关键词（可选，模糊匹配 title/description）
+     * @param pageNum  页码，默认 1
+     * @param pageSize 每页条数，默认 10
+     * @return 分页结果
+     */
+    PageResult<Resource> listMyDrafts(Long ownerId, String keyword,
+                                      Integer pageNum, Integer pageSize);
+
+    /**
+     * 获取草稿详情（仅本人可看）
+     *
+     * @param id         草稿 resource.id
+     * @param operatorId 当前操作人ID
+     * @return Resource 草稿详情
+     */
+    Resource getDraft(Long id, Long operatorId);
+
+    /**
+     * 删除草稿（仅本人可删，物理删除）
+     *
+     * @param id         草稿 resource.id
+     * @param operatorId 当前操作人ID
+     */
+    void deleteDraft(Long id, Long operatorId);
 }

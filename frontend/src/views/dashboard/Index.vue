@@ -146,12 +146,13 @@ const cards = computed(() => {
 
 const quickLinks = computed(() => {
   const arr = [
-    { name: '资源中心', to: '/resource/list',    icon: 'Compass' },
-    { name: '发布资源', to: '/resource/publish', icon: 'Upload' },
-    { name: '我的收藏', to: '/profile/favorites',icon: 'Star' },
-    { name: '我的资源', to: '/profile/resources',icon: 'Folder' },
-    { name: '个人信息', to: '/profile/info',     icon: 'User' },
-    { name: '修改密码', to: '/profile/password', icon: 'Lock' }
+    { name: '资源中心', to: '/resource/list',     icon: 'Compass' },
+    { name: '发布资源', to: '/resource/publish',  icon: 'Upload' },
+    { name: '我的草稿', to: '/profile/drafts',    icon: 'EditPen' },
+    { name: '我的收藏', to: '/profile/favorites', icon: 'Star' },
+    { name: '我的资源', to: '/profile/resources', icon: 'Folder' },
+    { name: '个人信息', to: '/profile/info',      icon: 'User' },
+    { name: '修改密码', to: '/profile/password',  icon: 'Lock' }
   ]
   if (user.isAdmin) {
     arr.push(

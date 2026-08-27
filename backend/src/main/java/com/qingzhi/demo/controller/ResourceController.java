@@ -247,6 +247,85 @@ public class ResourceController {
     }
 
     /* ====================================================================================
+     * 8. 草稿箱：保存草稿
+     *    POST /api/resource/draft
+     *    Body（JSON）：id（可选，有则为更新）+ 任意字段（无必填强校验）
+     *    返回：Result<Map<String, Object>>  { draftId: Long }
+     * ==================================================================================== */
+
+    @PostMapping("/draft")
+    public Result<Map<String, Object>> saveDraft(@RequestBody Resource body,
+                                                 HttpServletRequest request) {
+        Long operatorId = JwtInterceptor.getCurrentUserId(request);
+        BusinessException.throwIfNull(operatorId, ResponseCodeEnum.UNAUTHORIZED);
+
+        Long draftId = resourceService.saveDraft(body, operatorId);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("draftId", draftId);
+        return Result.success(data);
+    }
+
+    /* ====================================================================================
+     * 9. 草稿箱：我的草稿列表（分页）
+     *    GET /api/resource/drafts
+     *    Query：keyword(可选) / pageNum(默认1) / pageSize(默认10)
+     *    返回：Result<PageResult<Resource>>   （仅 reviewStatus=3 的草稿）
+     * ==================================================================================== */
+
+    @GetMapping("/drafts")
+    public Result<PageResult<Resource>> listDrafts(
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "pageNum", required = false) Integer pageNum,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            HttpServletRequest request) {
+
+        Long ownerId = JwtInterceptor.getCurrentUserId(request);
+        BusinessException.throwIfNull(ownerId, ResponseCodeEnum.UNAUTHORIZED);
+
+        PageResult<Resource> page = resourceService.listMyDrafts(ownerId, keyword, pageNum, pageSize);
+        return Result.success(page);
+    }
+
+    /* ====================================================================================
+     * 10. 草稿箱：草稿详情（仅本人）
+     *     GET /api/resource/draft/{id}
+     *     返回：Result<Resource>
+     * ==================================================================================== */
+
+    @GetMapping("/draft/{id}")
+    public Result<Resource> getDraft(@PathVariable("id") Long id,
+                                     HttpServletRequest request) {
+        Long operatorId = JwtInterceptor.getCurrentUserId(request);
+        BusinessException.throwIfNull(operatorId, ResponseCodeEnum.UNAUTHORIZED);
+
+        Resource draft = resourceService.getDraft(id, operatorId);
+        return Result.success(draft);
+    }
+
+    /* ====================================================================================
+     * 11. 草稿箱：删除草稿（仅本人，物理删除）
+     *     POST /api/resource/draft/delete
+     *     Body：{ id: Long }
+     *     返回：Result<Map<String, Object>>  { deleted: true }
+     * ==================================================================================== */
+
+    @PostMapping("/draft/delete")
+    public Result<Map<String, Object>> deleteDraft(@RequestBody Map<String, Long> body,
+                                                   HttpServletRequest request) {
+        Long operatorId = JwtInterceptor.getCurrentUserId(request);
+        BusinessException.throwIfNull(operatorId, ResponseCodeEnum.UNAUTHORIZED);
+        Long draftId = body != null ? body.get("id") : null;
+        BusinessException.throwIfNull(draftId, ResponseCodeEnum.RESOURCE_NOT_FOUND, "草稿ID不能为空");
+
+        resourceService.deleteDraft(draftId, operatorId);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("deleted", true);
+        return Result.success(data);
+    }
+
+    /* ====================================================================================
      * 辅助：根据扩展名猜测下载 Content-Type（默认 application/octet-stream 触发浏览器下载）
      * ==================================================================================== */
 

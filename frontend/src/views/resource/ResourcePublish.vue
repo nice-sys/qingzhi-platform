@@ -29,7 +29,7 @@
       />
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px" size="default">
-        <el-form-item label="文件" prop="storageId" required>
+        <el-form-item label="文件" prop="fileStorageId" required>
           <FileUpload
             :limit="1"
             :max-size="MAX_UPLOAD_SIZE"
@@ -107,9 +107,9 @@
               <p class="mb-0 text-muted whitespace-pre-wrap" style="line-height:1.9">
                 {{ form.description || '（暂无描述）' }}
               </p>
-              <div v-if="tags.value.length" class="mt-8">
+              <div v-if="tags.length" class="mt-8">
                 <el-tag
-                  v-for="t in tags.value"
+                  v-for="t in tags"
                   :key="t"
                   size="small"
                   effect="plain"
@@ -123,7 +123,7 @@
 
         <el-form-item label="关键词标签">
           <el-select
-            v-model="tags.value"
+            v-model="tags"
             filterable
             allow-create
             multiple
@@ -141,13 +141,13 @@
             />
           </el-select>
           <div class="text-muted text-sm mt-4 flex-between">
-            <span>💡 已选 {{ tags.value.length }}/{{ MAX_TAGS }}；可使用预设，也可自创新标签</span>
+            <span>💡 已选 {{ tags.length }}/{{ MAX_TAGS }}；可使用预设，也可自创新标签</span>
             <el-button
               link
               type="danger"
               size="small"
-              :disabled="!tags.value.length"
-              @click="tags.value = []; onTagsChange(tags.value)"
+              :disabled="!tags.length"
+              @click="tags = []; onTagsChange(tags)"
             >清空全部</el-button>
           </div>
         </el-form-item>
@@ -168,7 +168,10 @@ import { onBeforeUnmount, onMounted, reactive, ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FileUpload from '@/components/common/FileUpload.vue'
-import { publishResource, updateResource, resourceDetail } from '@/api/resource'
+import {
+  publishResource, updateResource, resourceDetail,
+  saveDraftResource, getDraft, deleteDraft
+} from '@/api/resource'
 import { formatFileSize } from '@/utils/format'
 import {
   CATEGORY_OPTIONS, RESOURCE_TAG_PRESETS, MAX_TAGS, MAX_UPLOAD_SIZE,
@@ -176,7 +179,7 @@ import {
 } from '@/utils/constants'
 
 const DRAFT_KEY = 'qz_resource_draft_v1'
-const DRAFT_TTL = 30 * 60 * 1000 // 30 分钟
+const DRAFT_TTL = 30 * 60 * 1000 // 30 分钟（localStorage 辅助兜底）
 
 const route = useRoute()
 const router = useRouter()
@@ -185,6 +188,7 @@ const submitting = ref(false)
 const tags = ref([])
 const hasDraft = ref(false)
 const draftSavedAt = ref('')
+const draftId = ref(0) // 当前关联的后端草稿ID（0 = 尚未保存为后端草稿）
 
 const mode = computed(() => (route.params.id ? 'update' : 'publish'))
 const editingId = computed(() => Number(route.params.id) || 0)
@@ -202,12 +206,12 @@ const fileInfo = reactive({
 })
 
 const rules = {
-  fileStorageId: [{ required: true, message: '请先上传文件', trigger: 'change' }],
-  title:         [{ required: true, message: '请填写资源标题', trigger: 'blur' },
-                  { min: 5, max: 200, message: '5-200 字符', trigger: 'blur' }],
-  course:        [{ required: true, message: '请选择课程分类', trigger: 'change' }],
-  description:   [{ required: true, message: '请填写资源描述', trigger: 'blur' },
-                  { min: 10, max: 1000, message: '10-1000 字符', trigger: 'blur' }]
+  fileStorageId: [{ required: true, message: '请先上传文件', trigger: ['change', 'submit'] }],
+  title:         [{ required: true, message: '请填写资源标题', trigger: ['blur', 'change', 'submit'] },
+                  { min: 5, max: 200, message: '5-200 字符', trigger: ['blur', 'change', 'submit'] }],
+  course:        [{ required: true, message: '请选择课程分类', trigger: ['change', 'submit'] }],
+  description:   [{ required: true, message: '请填写资源描述', trigger: ['blur', 'change', 'submit'] },
+                  { min: 10, max: 1000, message: '10-1000 字符', trigger: ['blur', 'change', 'submit'] }]
 }
 const formatSize = formatFileSize
 
@@ -244,30 +248,55 @@ function onFileRm() {
   saveDraft(true)
 }
 
-/* -------------------- 草稿系统（localStorage 30min） -------------------- */
+/* -------------------- 草稿系统（后端持久化 + localStorage 兜底 30min） -------------------- */
 function nowStr() {
   const d = new Date()
   const pad = (n) => n.toString().padStart(2, '0')
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
-function saveDraft(silent) {
+let saveDraftPromise = null
+async function saveDraft(silent) {
+  // localStorage 兜底（无论后端是否成功都写本地）
   const payload = {
     savedAt: Date.now(),
     editingId: editingId.value,
+    draftId: draftId.value,
     form: { ...form },
     fileInfo: { ...fileInfo },
     tags: [...tags.value]
   }
-  try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(payload))
-    if (!silent) {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(payload)) } catch (_) {}
+
+  // 保存后端草稿（编辑 update 模式下不调用草稿接口，草稿仅用于 publish 模式）
+  if (mode.value === 'update') {
+    if (!silent) ElMessage.success('已记录本地修改')
+    return
+  }
+
+  // 防抖合并：如果上一次还在执行，复用 Promise
+  if (saveDraftPromise) return saveDraftPromise
+  const body = { ...form }
+  if (draftId.value > 0) body.id = draftId.value
+  saveDraftPromise = (async () => {
+    try {
+      const d = await saveDraftResource(body)
+      const newId = Number(d?.draftId) || 0
+      if (newId > 0) draftId.value = newId
       hasDraft.value = true
       draftSavedAt.value = nowStr()
-      ElMessage.success('草稿已保存')
+      if (!silent) ElMessage.success('草稿已保存')
+    } catch (err) {
+      if (!silent) {
+        const msg = err?.message || '草稿保存失败，已本地缓存'
+        ElMessage.warning(msg)
+      }
+    } finally {
+      saveDraftPromise = null
     }
-  } catch (_) {}
+  })()
+  return saveDraftPromise
 }
-function loadDraft() {
+function loadLocalDraft() {
   try {
     const raw = localStorage.getItem(DRAFT_KEY)
     if (!raw) return false
@@ -279,14 +308,46 @@ function loadDraft() {
     Object.assign(form, p.form || {})
     Object.assign(fileInfo, p.fileInfo || {})
     tags.value = p.tags || []
+    if (p.draftId > 0) draftId.value = Number(p.draftId) || 0
     hasDraft.value = true
     draftSavedAt.value = new Date(p.savedAt).toLocaleTimeString('zh-CN', { hour12: false })
     return true
   } catch (_) { return false }
 }
-function clearDraft() { try { localStorage.removeItem(DRAFT_KEY) } catch (_) {} }
+async function loadServerDraft(id) {
+  if (!id) return false
+  try {
+    const d = await getDraft(id)
+    form.title = d.title || ''
+    form.course = d.course || ''
+    form.description = d.description || ''
+    form.tags = d.tags || ''
+    form.fileStorageId = Number(d.fileStorageId) || 0
+    tags.value = (form.tags || '').split(',').filter(Boolean).slice(0, MAX_TAGS)
+    if (form.fileStorageId > 0) {
+      const name = d.fileName || ''
+      fileInfo.name = name
+      fileInfo.size = d.fileSize || 0
+      const t = d.type || resolveTypeByFilename(name)
+      fileInfo.type = t
+      fileInfo.typeLabel = RESOURCE_TYPE_LABEL[t] || RESOURCE_TYPE_LABEL.other
+      fileInfo.icon = TYPE_ICON[t] || TYPE_ICON.other
+    }
+    draftId.value = id
+    hasDraft.value = true
+    draftSavedAt.value = d.updatedAt ? new Date(d.updatedAt).toLocaleTimeString('zh-CN', { hour12: false }) : nowStr()
+    return true
+  } catch (err) {
+    const msg = err?.message || '加载草稿失败'
+    ElMessage.warning(msg)
+    return false
+  }
+}
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY) } catch (_) {}
+}
 async function discardDraft() {
-  const hasContent = titleCount.value > 0 || descCount.value > 0 || form.fileStorageId > 0
+  const hasContent = titleCount.value > 0 || descCount.value > 0 || form.fileStorageId > 0 || draftId.value > 0
   if (hasContent) {
     try {
       await ElMessageBox.confirm('当前输入内容将被丢弃，确定返回吗？', '提示', { type: 'warning' })
@@ -300,7 +361,12 @@ async function discardDraft() {
 async function submit() {
   try {
     await formRef.value.validate()
-  } catch (_) { return }
+  } catch (err) {
+    const firstErr = Array.isArray(err) ? err[0]?.message : (err?.message || '请完善表单必填项')
+    ElMessage.warning(`请完善表单：${firstErr}`)
+    return
+  }
+  if (submitting.value) return
   submitting.value = true
   try {
     if (mode.value === 'update') {
@@ -311,17 +377,31 @@ async function submit() {
     } else {
       await publishResource({ ...form })
       ElMessage.success('发布成功，等待管理员审核')
+      // 发布成功后，删除对应的后端草稿（如果存在）
+      if (draftId.value > 0) {
+        try { await deleteDraft(draftId.value) } catch (_) {}
+      }
       clearDraft()
       router.replace('/profile/resources')
     }
-  } catch (_) {} finally { submitting.value = false }
+  } catch (err) {
+    const msg = err?.message || err?.msg || (err && typeof err === 'string' ? err : '资源发布失败，请检查网络或稍后重试')
+    ElMessage.error(msg)
+  } finally { submitting.value = false }
 }
 
-/* -------------------- 编辑模式：读后端详情（草稿优先） -------------------- */
+/* -------------------- 编辑模式 / 草稿回填 -------------------- */
 async function loadEditing() {
+  // 1. 如果 URL 里有 draftId，优先从后端加载草稿（发布页继续编辑草稿场景）
+  const qid = Number(route.query?.draftId) || 0
+  if (qid > 0 && mode.value === 'publish') {
+    const ok = await loadServerDraft(qid)
+    if (ok) return
+  }
+  // 2. 编辑 update 模式：读后端资源详情（并优先尝试从 localStorage 草稿恢复未保存改动）
   if (!editingId.value) return
-  const draftLoaded = loadDraft()
-  if (draftLoaded) return
+  const localOk = loadLocalDraft()
+  if (localOk) return
   try {
     const d = await resourceDetail(editingId.value)
     form.title = d.title || ''
@@ -343,10 +423,12 @@ async function loadEditing() {
   } catch (_) {}
 }
 
-/* 自动草稿（防抖 1s） */
+/* 自动草稿（防抖 1s）：至少填了一个字段才保存（避免空草稿一堆） */
 let timer = null
 watch([() => form.title, () => form.description, () => form.course], () => {
   if (timer) clearTimeout(timer)
+  const hasAny = titleCount.value > 0 || descCount.value > 0 || form.course || form.fileStorageId > 0
+  if (!hasAny) return
   timer = setTimeout(() => saveDraft(true), 1000)
 })
 onBeforeUnmount(() => { if (timer) clearTimeout(timer) })

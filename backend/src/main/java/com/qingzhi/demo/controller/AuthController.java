@@ -45,8 +45,7 @@ public class AuthController {
      */
     @PostMapping("/register")
     public Result<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
-        UserInfoResponse userInfo = authService.register(request);
-        LoginResponse response = LoginResponse.ofRegisterSuccess(userInfo);
+        LoginResponse response = authService.register(request);
         return Result.success("注册成功", response);
     }
 
