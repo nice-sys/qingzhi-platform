@@ -20,21 +20,36 @@
       >
         <template v-for="item in menuList" :key="item.path">
           <!-- 有子菜单 -->
-          <el-sub-menu v-if="item.children && item.children.length" :index="item.path">
-            <template #title>
-              <el-icon v-if="item.meta && item.meta.icon"><component :is="item.meta.icon" /></el-icon>
-              <span>{{ item.meta ? item.meta.title : '' }}</span>
-            </template>
-            <template v-for="ch in item.children" :key="ch.path">
-              <el-menu-item
-                v-if="ch.meta && ch.meta.sidebar !== false && hasRole(ch)"
-                :index="resolve(item.path, ch.path)"
-              >
-                <el-icon v-if="ch.meta.icon"><component :is="ch.meta.icon" /></el-icon>
-                <template #title>{{ ch.meta.title }}</template>
-              </el-menu-item>
-            </template>
-          </el-sub-menu>
+          <template v-if="item.children && item.children.length">
+            <!-- 仅 1 个可见子菜单项 + meta.sidebarSingleChild=true → 直接平铺为单个菜单，避免多余嵌套 -->
+            <el-menu-item
+              v-if="
+                item.meta && item.meta.sidebarSingleChild === true
+                && visibleChildren(item).length === 1
+                && hasRole(visibleChildren(item)[0])
+              "
+              :index="resolve(item.path, visibleChildren(item)[0].path)"
+            >
+              <el-icon v-if="item.meta.icon"><component :is="item.meta.icon" /></el-icon>
+              <template #title>{{ item.meta.title }}</template>
+            </el-menu-item>
+            <!-- 多子菜单 / 无子菜单标记 → 标准 sub-menu 嵌套 -->
+            <el-sub-menu v-else :index="item.path">
+              <template #title>
+                <el-icon v-if="item.meta && item.meta.icon"><component :is="item.meta.icon" /></el-icon>
+                <span>{{ item.meta ? item.meta.title : '' }}</span>
+              </template>
+              <template v-for="ch in item.children" :key="ch.path">
+                <el-menu-item
+                  v-if="ch.meta && ch.meta.sidebar !== false && hasRole(ch)"
+                  :index="resolve(item.path, ch.path)"
+                >
+                  <el-icon v-if="ch.meta.icon"><component :is="ch.meta.icon" /></el-icon>
+                  <template #title>{{ ch.meta.title }}</template>
+                </el-menu-item>
+              </template>
+            </el-sub-menu>
+          </template>
           <!-- 无嵌套 -->
           <el-menu-item
             v-else-if="item.meta && item.meta.sidebar !== false && hasRole(item)"
@@ -74,6 +89,10 @@ function hasRole(routeDef) {
   const roles = routeDef.meta && routeDef.meta.roles
   if (!roles || roles.length === 0) return true
   return roleMatchesAny(user.role, roles)
+}
+function visibleChildren(item) {
+  if (!item || !Array.isArray(item.children)) return []
+  return item.children.filter(ch => ch.meta && ch.meta.sidebar !== false)
 }
 function resolve(parent, child) {
   if (child.startsWith('/')) return child

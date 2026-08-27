@@ -63,8 +63,8 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="课程分类" prop="category">
-              <el-select v-model="form.category" class="w-full" placeholder="选择课程分类" filterable>
+            <el-form-item label="课程分类" prop="course">
+              <el-select v-model="form.course" class="w-full" placeholder="选择课程分类" filterable>
                 <el-option
                   v-for="c in CATEGORY_OPTIONS"
                   :key="c.value"
@@ -100,7 +100,7 @@
               <div class="flex-between mb-8">
                 <h4 class="mb-0">{{ form.title || '（未填写标题）' }}</h4>
                 <div>
-                  <el-tag size="small" effect="plain" v-if="form.category">{{ form.category }}</el-tag>
+                  <el-tag size="small" effect="plain" v-if="form.course">{{ form.course }}</el-tag>
                   <el-tag size="small" effect="plain" type="info" class="ml-4" v-if="fileInfo.typeLabel">{{ fileInfo.typeLabel }}</el-tag>
                 </div>
               </div>
@@ -190,9 +190,9 @@ const mode = computed(() => (route.params.id ? 'update' : 'publish'))
 const editingId = computed(() => Number(route.params.id) || 0)
 
 const form = reactive({
-  storageId: 0,
+  fileStorageId: 0,
   title: '',
-  category: '',
+  course: '',
   description: '',
   tags: ''
 })
@@ -202,12 +202,12 @@ const fileInfo = reactive({
 })
 
 const rules = {
-  storageId:   [{ required: true, message: '请先上传文件', trigger: 'change' }],
-  title:       [{ required: true, message: '请填写资源标题', trigger: 'blur' },
-                { min: 5, max: 200, message: '5-200 字符', trigger: 'blur' }],
-  category:    [{ required: true, message: '请选择课程分类', trigger: 'change' }],
-  description: [{ required: true, message: '请填写资源描述', trigger: 'blur' },
-                { min: 10, max: 1000, message: '10-1000 字符', trigger: 'blur' }]
+  fileStorageId: [{ required: true, message: '请先上传文件', trigger: 'change' }],
+  title:         [{ required: true, message: '请填写资源标题', trigger: 'blur' },
+                  { min: 5, max: 200, message: '5-200 字符', trigger: 'blur' }],
+  course:        [{ required: true, message: '请选择课程分类', trigger: 'change' }],
+  description:   [{ required: true, message: '请填写资源描述', trigger: 'blur' },
+                  { min: 10, max: 1000, message: '10-1000 字符', trigger: 'blur' }]
 }
 const formatSize = formatFileSize
 
@@ -222,11 +222,11 @@ function onTagsChange(list) {
 }
 function onFileOk(data) {
   if (!data) return
-  form.storageId = data.storageId || data.id || 0
+  form.fileStorageId = data.fileStorageId || data.storageId || data.id || 0
   const name = data.originalName || data.name || ''
   fileInfo.name = name
   fileInfo.size = data.fileSize || 0
-  fileInfo.quick = !!data.quickUpload
+  fileInfo.quick = !!data.quickUpload || !!data.hitQuickUpload
   const type = data.type || resolveTypeByFilename(name)
   fileInfo.type = type
   fileInfo.typeLabel = RESOURCE_TYPE_LABEL[type] || RESOURCE_TYPE_LABEL.other
@@ -234,7 +234,7 @@ function onFileOk(data) {
   saveDraft(true)
 }
 function onFileRm() {
-  form.storageId = 0
+  form.fileStorageId = 0
   fileInfo.name = ''
   fileInfo.size = 0
   fileInfo.quick = false
@@ -286,7 +286,7 @@ function loadDraft() {
 }
 function clearDraft() { try { localStorage.removeItem(DRAFT_KEY) } catch (_) {} }
 async function discardDraft() {
-  const hasContent = titleCount.value > 0 || descCount.value > 0 || form.storageId > 0
+  const hasContent = titleCount.value > 0 || descCount.value > 0 || form.fileStorageId > 0
   if (hasContent) {
     try {
       await ElMessageBox.confirm('当前输入内容将被丢弃，确定返回吗？', '提示', { type: 'warning' })
@@ -325,13 +325,14 @@ async function loadEditing() {
   try {
     const d = await resourceDetail(editingId.value)
     form.title = d.title || ''
-    form.category = d.category || ''
+    form.course = d.course || ''
     form.description = d.description || ''
     form.tags = d.tags || ''
     tags.value = (form.tags || '').split(',').filter(Boolean).slice(0, MAX_TAGS)
-    if (d.storageId) {
-      form.storageId = d.storageId
-      const name = d.originalName || ''
+    const fsId = d.fileStorageId || d.storageId || d.id
+    if (fsId && Number(fsId) > 0) {
+      form.fileStorageId = Number(fsId)
+      const name = d.originalName || d.fileName || ''
       fileInfo.name = name
       fileInfo.size = d.fileSize || 0
       const t = d.type || resolveTypeByFilename(name)
@@ -344,7 +345,7 @@ async function loadEditing() {
 
 /* 自动草稿（防抖 1s） */
 let timer = null
-watch([() => form.title, () => form.description, () => form.category], () => {
+watch([() => form.title, () => form.description, () => form.course], () => {
   if (timer) clearTimeout(timer)
   timer = setTimeout(() => saveDraft(true), 1000)
 })

@@ -52,6 +52,16 @@ export function listResource(params = {}) {
 export const listResources = listResource
 
 /**
+ * 首页 Dashboard 聚合统计（资源总数 / 已通过 / 待审核 / 累计下载 / 用户数）
+ * GET /api/resource/stats
+ * 返回：{ resourceTotal, approvedCount, pendingCount, rejectedCount, downloadTotal, todayDownloadCount, userCount }
+ */
+export function getResourceStats() {
+  return request.get('/resource/stats')
+}
+export const getStats = getResourceStats
+
+/**
  * 资源详情（按可见性规则）
  * GET /api/resource/{id}
  */

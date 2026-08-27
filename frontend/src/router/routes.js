@@ -33,6 +33,7 @@ export const routes = [
     path: '/',
     component: Layout,
     redirect: '/dashboard',
+    meta: { title: '首页', icon: 'HomeFilled', roles: LOGIN, sidebarSingleChild: true },
     children: [
       {
         path: 'dashboard',

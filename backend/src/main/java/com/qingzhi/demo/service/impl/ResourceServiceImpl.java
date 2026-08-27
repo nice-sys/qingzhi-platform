@@ -9,6 +9,7 @@ import com.qingzhi.demo.enums.ReviewStatusEnum;
 import com.qingzhi.demo.enums.RoleEnum;
 import com.qingzhi.demo.exception.BusinessException;
 import com.qingzhi.demo.mapper.ResourceMapper;
+import com.qingzhi.demo.mapper.UserMapper;
 import com.qingzhi.demo.service.FileService;
 import com.qingzhi.demo.service.ResourceService;
 import org.slf4j.Logger;
@@ -16,9 +17,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.LocalDate;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.util.StringUtils;
 
 /**
@@ -32,10 +37,13 @@ public class ResourceServiceImpl implements ResourceService {
 
     private final ResourceMapper resourceMapper;
     private final FileService fileService;
+    private final UserMapper userMapper;
 
-    public ResourceServiceImpl(ResourceMapper resourceMapper, FileService fileService) {
+    public ResourceServiceImpl(ResourceMapper resourceMapper, FileService fileService,
+                               UserMapper userMapper) {
         this.resourceMapper = resourceMapper;
         this.fileService = fileService;
+        this.userMapper = userMapper;
     }
 
     /* ====================================================================================
@@ -390,5 +398,41 @@ public class ResourceServiceImpl implements ResourceService {
         if (s == null) return null;
         String t = s.trim();
         return t.isEmpty() ? null : t;
+    }
+
+    /* ====================================================================================
+     * 八、首页 Dashboard 聚合统计
+     * ==================================================================================== */
+
+    @Override
+    public Map<String, Object> getDashboardStats() {
+        // 1. 资源侧聚合（资源总数 / 已通过 / 待审核 / 已拒绝 / 下载总量）
+        Map<String, Object> rs = resourceMapper.selectDashboardStats();
+        Map<String, Object> out = new HashMap<>();
+        out.put("resourceTotal",    toLong(rs == null ? null : rs.get("resourceTotal")));
+        out.put("approvedCount",    toLong(rs == null ? null : rs.get("approvedCount")));
+        out.put("pendingCount",     toLong(rs == null ? null : rs.get("pendingCount")));
+        out.put("rejectedCount",    toLong(rs == null ? null : rs.get("rejectedCount")));
+        out.put("downloadTotal",    toLong(rs == null ? null : rs.get("downloadTotal")));
+        out.put("todayDownloadCount", toLong(rs == null ? null : rs.get("todayDownloadCount")));
+
+        // 2. 用户侧
+        out.put("userCount", userMapper.countTotalUsers());
+        return out;
+    }
+
+    /** Number → long（处理 MySQL COUNT/SUM 返回的 Long/BigInteger/BigDecimal/Number 各种情形） */
+    private static long toLong(Object v) {
+        if (v == null) return 0L;
+        if (v instanceof Number) {
+            if (v instanceof BigInteger) return ((BigInteger) v).longValue();
+            if (v instanceof BigDecimal) return ((BigDecimal) v).longValue();
+            return ((Number) v).longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(v));
+        } catch (Exception ignore) {
+            return 0L;
+        }
     }
 }

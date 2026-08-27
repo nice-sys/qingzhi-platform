@@ -102,20 +102,47 @@
 import { computed, onMounted, ref } from 'vue'
 import { useUserStore } from '@/stores/userStore'
 import { formatDateTime } from '@/utils/format'
+import { ElMessage } from 'element-plus'
+import { getResourceStats } from '@/api/resource'
 
 const user = useUserStore()
 const now = ref(formatDateTime(Date.now()))
-onMounted(() => {
-  now.value = formatDateTime(Date.now())
+const stats = ref({
+  resourceTotal: 0,
+  approvedCount: 0,
+  downloadTotal: 0,
+  todayDownloadCount: 0,
+  userCount: 0,
+  pendingCount: 0
 })
 
-/* 占位 mock 数据，等下一批次对接后端真实统计 API */
-const cards = computed(() => [
-  { label: '平台资源总数', value: '238', icon: 'Document',  color: 'var(--qz-primary)' },
-  { label: '已通过审核',   value: '201', icon: 'Checked',   color: 'var(--qz-review-pass)' },
-  { label: '今日下载次数', value: '1,236', icon: 'Download', color: 'var(--qz-role-teacher)' },
-  { label: '平台用户数',   value: '1,024', icon: 'UserFilled', color: 'var(--qz-role-admin)' }
-])
+async function loadStats() {
+  try {
+    const d = await getResourceStats()
+    if (d && typeof d === 'object') stats.value = { ...stats.value, ...d }
+  } catch (e) {
+    ElMessage.warning(e?.message || '统计数据加载失败')
+  }
+}
+onMounted(() => {
+  now.value = formatDateTime(Date.now())
+  loadStats()
+})
+
+function fmt(n) {
+  const v = Number(n) || 0
+  return v.toLocaleString('en-US')
+}
+
+const cards = computed(() => {
+  const s = stats.value
+  return [
+    { label: '平台资源总数', value: fmt(s.resourceTotal),      icon: 'Document',   color: 'var(--qz-primary)' },
+    { label: '已通过审核',   value: fmt(s.approvedCount),      icon: 'Checked',    color: 'var(--qz-review-pass)' },
+    { label: '累计下载次数', value: fmt(s.downloadTotal),      icon: 'Download',   color: 'var(--qz-role-teacher)' },
+    { label: '平台用户数',   value: fmt(s.userCount),          icon: 'UserFilled', color: 'var(--qz-role-admin)' }
+  ]
+})
 
 const quickLinks = computed(() => {
   const arr = [

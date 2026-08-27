@@ -77,4 +77,12 @@ public interface ResourceMapper {
      * @return 影响行数（资源不存在返回 0，成功返回 1）
      */
     int incrementDownloadCount(@Param("id") Long id);
+
+    /**
+     * 首页 Dashboard 聚合统计：资源总数 / 已通过 / 待审核 / 已拒绝 / 累计下载量
+     * <p>单条 SQL 一次返回，避免多次查询。
+     *
+     * @return Map，key 参考 ResourceMapper.xml 中 selectDashboardStats 的列别名
+     */
+    java.util.Map<String, Object> selectDashboardStats();
 }

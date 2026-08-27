@@ -205,4 +205,11 @@
         WHERE id = #{id}
     </update>
 
+    <!-- ============================================================
+         11. 平台用户总数（首页 Dashboard 统计卡片）
+         ============================================================ -->
+    <select id="countTotalUsers" resultType="long">
+        SELECT COUNT(1) FROM user
+    </select>
+
 </mapper>

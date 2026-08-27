@@ -208,4 +208,25 @@
         WHERE id = #{id}
     </update>
 
+    <!-- ============================================================
+         9. 首页 Dashboard 聚合统计（一条 SQL 一次返回所有指标，避免 N+1）
+         - resourceTotal     : 平台资源总数
+         - approvedCount     : 已通过审核资源数(review_status=1)
+         - pendingCount      : 待审核资源数(review_status=0)
+         - rejectedCount     : 已拒绝资源数(review_status=2)
+         - downloadTotal     : 累计下载总次数(SUM(download_count))
+         - todayDownloadCount: 今日下载次数（resource 无下载日志表，暂时与总累计保持一致，
+                               预留字段后续加 download_log 表后替换）
+         ============================================================ -->
+    <select id="selectDashboardStats" resultType="map">
+        SELECT
+            COUNT(1)                                                    AS resourceTotal,
+            SUM(CASE WHEN review_status = 1 THEN 1 ELSE 0 END)         AS approvedCount,
+            SUM(CASE WHEN review_status = 0 THEN 1 ELSE 0 END)         AS pendingCount,
+            SUM(CASE WHEN review_status = 2 THEN 1 ELSE 0 END)         AS rejectedCount,
+            COALESCE(SUM(download_count), 0)                           AS downloadTotal,
+            COALESCE(SUM(download_count), 0)                           AS todayDownloadCount
+        FROM resource
+    </select>
+
 </mapper>

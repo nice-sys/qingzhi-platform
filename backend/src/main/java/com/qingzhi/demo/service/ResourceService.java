@@ -114,4 +114,12 @@ public interface ResourceService {
      * @return Resource（含 file_name / file_path / file_size 等文件信息）
      */
     Resource downloadResource(Long resourceId, Long viewerId, Integer viewerRole);
+
+    /**
+     * 首页 Dashboard 聚合统计（供所有登录用户查看；管理员也能看到 pendingCount 等运维指标）
+     *
+     * @return 包含 userCount / resourceTotal / approvedCount / pendingCount /
+     *         rejectedCount / downloadTotal / todayDownloadCount 的 Map
+     */
+    java.util.Map<String, Object> getDashboardStats();
 }

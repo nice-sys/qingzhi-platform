@@ -85,7 +85,8 @@ async function startUpload() {
     ElMessage.success(`上传完成（${fileList.value.length} 个文件）`)
     clearAll()
   } catch (err) {
-    // request 拦截器统一错误提示
+    const msg = (err && err.message) || '文件上传失败，请稍后重试'
+    ElMessage.error(msg)
   } finally {
     uploading.value = false
   }

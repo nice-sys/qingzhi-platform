@@ -112,4 +112,11 @@ public interface UserMapper {
      * @return 影响行数
      */
     int updateById(User user);
+
+    /**
+     * 统计平台用户总数（所有角色 + 所有状态）
+     *
+     * @return 用户数（空表返回 0）
+     */
+    long countTotalUsers();
 }

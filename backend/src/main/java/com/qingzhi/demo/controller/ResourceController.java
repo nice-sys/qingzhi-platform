@@ -139,6 +139,13 @@ public class ResourceController {
      *    返回：Result<Resource>
      * ==================================================================================== */
 
+    @GetMapping("/stats")
+    public Result<Map<String, Object>> stats(HttpServletRequest request) {
+        Long viewerId = JwtInterceptor.getCurrentUserId(request);
+        BusinessException.throwIfNull(viewerId, ResponseCodeEnum.UNAUTHORIZED);
+        return Result.success(resourceService.getDashboardStats());
+    }
+
     @GetMapping("/{id}")
     public Result<Resource> detail(@PathVariable("id") Long id,
                                    HttpServletRequest request) {
