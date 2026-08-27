@@ -126,9 +126,6 @@ public class ResourceController {
             @RequestParam(value = "pageSize", required = false) Integer pageSize,
             HttpServletRequest request) {
 
-        Long viewerId = JwtInterceptor.getCurrentUserId(request);
-        BusinessException.throwIfNull(viewerId, ResponseCodeEnum.UNAUTHORIZED);
-
         PageResult<Resource> page = resourceService.listApprovedResources(
                 keyword, course, startDate, endDate, pageNum, pageSize);
         return Result.success(page);
@@ -146,7 +143,6 @@ public class ResourceController {
     public Result<Resource> detail(@PathVariable("id") Long id,
                                    HttpServletRequest request) {
         Long viewerId = JwtInterceptor.getCurrentUserId(request);
-        BusinessException.throwIfNull(viewerId, ResponseCodeEnum.UNAUTHORIZED);
         Integer viewerRole = JwtInterceptor.getCurrentUserRole(request);
 
         Resource resource = resourceService.getResourceDetail(id, viewerId, viewerRole);

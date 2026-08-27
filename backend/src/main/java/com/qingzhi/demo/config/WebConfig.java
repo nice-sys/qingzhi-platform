@@ -48,14 +48,11 @@ public class WebConfig implements WebMvcConfigurer {
                 // 2. 文件下载（允许匿名下载过审资源，鉴权在 Controller 层按 reviewStatus 判断）
                 "/file/download/**",
 
-                // 3. 资源模块 - 仅公开的「GET 查询」接口（匿名用户可浏览，不涉及修改）
-                //    - 资源列表：GET /resource/list?page=1&size=10&keyword=&course=
-                //    - 资源详情：GET /resource/{id}  →  这里因为 AntPathMatcher /** 最宽松匹配，无法按 method 区分，
-                //                                   所以我们改用**仅放行 resource/list / resource/courses / resource/stats 等具名路径**，
-                //                                   详情 {id} 改为走 JwtInterceptor（JWT 无效时也允许匿名通过：见 JwtInterceptor 注释）
-                "/resource/list",
-                "/resource/courses",
-                "/resource/stats",
+                // 3. 资源模块 - 公开「GET 查询」接口统一由 JwtInterceptor 的 isPublicGet 机制处理：
+                //    - 有有效 Token → 解析并注入 userId（登录态保留）
+                //    - 无 Token / Token 过期 → 匿名放行（userId=null，允许浏览公开列表）
+                //    因此不再在这里 exclude，避免跳过拦截器导致已登录用户的 Token 也无法被解析。
+                //    （JwtInterceptor 中已显式匹配 /resource/list、/resource/courses、/resource/stats、/resource/{数字id}）
 
                 // 4. Actuator 监控端点
                 "/actuator/**",
