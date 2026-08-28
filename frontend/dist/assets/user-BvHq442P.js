@@ -1,0 +1,1 @@
+import{r as t}from"./request-R0agztLy.js";function n(){return t.get("/user/info")}function s(r={}){return t.post("/user/info",r)}function u(r={}){return t.post("/user/password",r)}function p(r,a){const e=new FormData;return e.append("file",r),t.post("/user/avatar",e,{headers:{"Content-Type":"multipart/form-data"},onUploadProgress:a})}export{s as a,u as c,n as g,p as u};

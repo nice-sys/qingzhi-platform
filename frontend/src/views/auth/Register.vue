@@ -20,7 +20,7 @@
             </el-col>
             <el-col :span="12">
               <el-form-item label="角色" prop="role">
-                <el-select v-model="form.role" class="w-full" placeholder="请选择身份">
+                <el-select v-model="form.role" class="w-full" placeholder="请选择身份" @change="onRoleChange">
                   <el-option label="教师" :value="1" />
                   <el-option label="学生" :value="2" />
                 </el-select>
@@ -43,7 +43,7 @@
             </el-col>
           </el-row>
 
-          <el-form-item label="姓名（选填）">
+          <el-form-item prop="name" :label="nameLabel">
             <el-input v-model="form.name" placeholder="请输入姓名" maxlength="50" />
           </el-form-item>
 
@@ -62,12 +62,12 @@
 
           <el-row :gutter="16">
             <el-col :span="12">
-              <el-form-item label="院系（选填）">
+              <el-form-item prop="department" :label="departmentLabel">
                 <el-input v-model="form.department" placeholder="如：计算机学院" maxlength="100" />
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="专业/班级（选填，学生建议填）">
+              <el-form-item prop="major" :label="majorLabel">
                 <el-input v-model="form.major" placeholder="如：软件工程2301" maxlength="100" />
               </el-form-item>
             </el-col>
@@ -88,7 +88,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { register } from '@/api/auth'
@@ -99,13 +99,16 @@ import {
   buildEmailValidator
 } from '@/utils/validate'
 
+const ROLE_TEACHER = 1
+const ROLE_STUDENT = 2
+
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
 
 const form = reactive({
   username: '',
-  role: 2,
+  role: ROLE_STUDENT,
   password: '',
   confirmPassword: '',
   name: '',
@@ -115,20 +118,60 @@ const form = reactive({
   major: ''
 })
 
+const isStudent = computed(() => String(form.role) === String(ROLE_STUDENT))
+const isTeacher = computed(() => String(form.role) === String(ROLE_TEACHER))
+
+const nameLabel       = '姓名（必填）'
+const departmentLabel = '院系（必填）'
+const majorLabel      = computed(() =>
+  isStudent.value ? '专业/班级（必填）' : '专业/班级（选填）'
+)
+
 const confirmPasswordValidator = (_r, v, cb) => {
   if (!v) return cb(new Error('请再次输入密码'))
   if (v !== form.password) return cb(new Error('两次输入的密码不一致'))
   cb()
 }
 
-const rules = {
+const nameValidator = (_r, v, cb) => {
+  if (!v || !String(v).trim()) return cb(new Error('姓名不能为空'))
+  if (String(v).trim().length > 50) return cb(new Error('姓名长度不能超过50个字符'))
+  cb()
+}
+
+const departmentValidator = (_r, v, cb) => {
+  if (!v || !String(v).trim()) return cb(new Error('院系不能为空'))
+  if (String(v).trim().length > 100) return cb(new Error('院系长度不能超过100个字符'))
+  cb()
+}
+
+const majorValidator = (_r, v, cb) => {
+  if (isStudent.value) {
+    if (!v || !String(v).trim()) return cb(new Error('学生必须填写专业/班级'))
+  }
+  if (v && String(v).trim().length > 100) return cb(new Error('专业长度不能超过100个字符'))
+  cb()
+}
+
+const rules = computed(() => ({
   username:        [{ validator: buildUsernameValidator(), trigger: 'blur' }],
   role:            [{ required: true, message: '请选择身份', trigger: 'change' }],
   password:        [{ validator: buildPasswordValidator(), trigger: 'blur' }],
   confirmPassword: [{ validator: confirmPasswordValidator, trigger: 'blur' }],
   phone:           [{ validator: buildPhoneValidator(false), trigger: 'blur' }],
-  email:           [{ validator: buildEmailValidator(false), trigger: 'blur' }]
+  email:           [{ validator: buildEmailValidator(false), trigger: 'blur' }],
+  name:            [{ validator: nameValidator, trigger: 'blur' }],
+  department:      [{ validator: departmentValidator, trigger: 'blur' }],
+  major:           [{ validator: majorValidator, trigger: 'blur' }]
+}))
+
+function onRoleChange() {
+  if (formRef && formRef.value) {
+    try { formRef.value.clearValidate(['major', 'department', 'name']) } catch (_) {}
+  }
 }
+
+watch(() => form.role, () => onRoleChange(), { flush: 'post' })
 
 async function doRegister() {
   try {
