@@ -7,6 +7,7 @@ import com.qingzhi.demo.mapper.FileStorageMapper;
 import com.qingzhi.demo.service.FileService;
 import com.qingzhi.demo.utils.FileUtil;
 import com.qingzhi.demo.utils.HashUtil;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,13 +36,53 @@ public class FileServiceImpl implements FileService {
     private final FileStorageMapper fileStorageMapper;
 
     /**
-     * 本地存储根目录（绝对路径，从 application.yml 注入）
+     * 本地存储根目录（原始注入值，可能是相对路径）
      */
     @Value("${qingzhi.upload.base-dir:./uploads}")
+    private String uploadBaseDirRaw;
+
+    /**
+     * 真实使用的绝对路径根目录（@PostConstruct 中解析计算，彻底消除 CWD 差异）
+     */
     private String uploadBaseDir;
 
     public FileServiceImpl(FileStorageMapper fileStorageMapper) {
         this.fileStorageMapper = fileStorageMapper;
+    }
+
+    @PostConstruct
+    public void init() {
+        String raw = uploadBaseDirRaw == null ? "./uploads" : uploadBaseDirRaw.trim();
+        Path p = Paths.get(raw);
+        if (!p.isAbsolute()) {
+            // 相对路径：优先以「项目根目录」作为锚点（D:\QingZhi），其次 user.dir（JVM 启动目录）
+            String anchor = System.getenv("QINGZHI_PROJECT_ROOT");
+            if (anchor == null || anchor.isEmpty()) {
+                String userDir = System.getProperty("user.dir");
+                if (userDir != null && !userDir.isEmpty()) {
+                    // 若是 backend 子目录启动，退回父目录（D:\QingZhi\backend -> D:\QingZhi）
+                    Path ud = Paths.get(userDir);
+                    if (ud.getFileName() != null && "backend".equalsIgnoreCase(ud.getFileName().toString())) {
+                        Path parent = ud.getParent();
+                        if (parent != null) anchor = parent.toString();
+                        else anchor = userDir;
+                    } else {
+                        anchor = userDir;
+                    }
+                } else {
+                    anchor = ".";
+                }
+            }
+            p = Paths.get(anchor, raw).normalize().toAbsolutePath();
+        }
+        this.uploadBaseDir = p.toString();
+        // 启动时打一条日志，便于核对"上传/下载"解析位置一致
+        log.info("[文件存储] 根目录解析：原始配置={} → 绝对路径={}", uploadBaseDirRaw, this.uploadBaseDir);
+        try {
+            if (!Files.exists(p)) Files.createDirectories(p);
+        } catch (IOException e) {
+            log.warn("[文件存储] 创建存储目录失败（不影响启动）：{}", this.uploadBaseDir, e);
+        }
     }
 
     /* ====================================================================================
@@ -84,6 +125,10 @@ public class FileServiceImpl implements FileService {
         if (existing != null) {
             // 4a. 秒传命中：引用计数 +1，不写磁盘，直接返回
             fileStorageMapper.incrementReferenceCount(existing.getId());
+            // 无论 DB 是否有这两列，都写实体引用计数用不到；但 fromEntity/回填逻辑需要（未来加列自动生效）
+            existing.setOriginalFileName(originalName);
+            String ext = FileUtil.getExtension(originalName);
+            if (ext != null && !ext.isEmpty()) existing.setFileExt(ext);
             log.info("秒传命中：哈希 {} 已存在，引用计数已 +1（当前引用数={})",
                     fileHash, existing.getReferenceCount() + 1);
             return buildResult(existing, originalName, true);
@@ -107,6 +152,9 @@ public class FileServiceImpl implements FileService {
         storage.setFilePath(relativePath);
         storage.setFileSize(fileSize);
         storage.setReferenceCount(1);
+        storage.setOriginalFileName(originalName);
+        String ext = FileUtil.getExtension(originalName);
+        if (ext != null && !ext.isEmpty()) storage.setFileExt(ext);
         fileStorageMapper.insert(storage);
 
         log.info("文件上传完成（新文件）：fileStorageId={}, hash={}, path={}, size={}",
@@ -132,13 +180,53 @@ public class FileServiceImpl implements FileService {
     }
 
     @Override
+    public String getUploadBaseDirDebug() { return uploadBaseDir; }
+
+    @Override
     public Path resolveFile(String relativePath) {
         if (relativePath == null || relativePath.isEmpty()) return null;
         try {
-            Path abs = Paths.get(uploadBaseDir, relativePath);
+            // 候选 1：直接 baseDir + relativePath（大多数情况）
+            Path abs = Paths.get(uploadBaseDir, relativePath).normalize();
             if (Files.exists(abs) && Files.isRegularFile(abs)) {
+                log.debug("[resolveFile] 命中候选1 path={}", abs);
                 return abs;
             }
+            // 候选 2：把 Windows 反斜杠 \ 统一转为 /（常见因 URL/表单拼接留下的混合）
+            String normalized = relativePath.replace('\\', '/');
+            if (!normalized.equals(relativePath)) {
+                Path abs2 = Paths.get(uploadBaseDir, normalized).normalize();
+                if (Files.exists(abs2) && Files.isRegularFile(abs2)) {
+                    log.debug("[resolveFile] 命中候选2 path={}", abs2);
+                    return abs2;
+                }
+                // 候选 3：去掉开头的 uploads/ 前缀（有的版本存储会多写一层）
+                if (normalized.startsWith("uploads/")) {
+                    Path abs3 = Paths.get(uploadBaseDir, normalized.substring("uploads/".length())).normalize();
+                    if (Files.exists(abs3) && Files.isRegularFile(abs3)) {
+                        log.debug("[resolveFile] 命中候选3 path={}", abs3);
+                        return abs3;
+                    }
+                    log.warn("[resolveFile] 都未命中 path={} candidates=[{} , {} , {}]",
+                            relativePath, abs, abs2, abs3);
+                    return null;
+                }
+                log.warn("[resolveFile] 都未命中 path={} candidates=[{} , {}]",
+                        relativePath, abs, abs2);
+                return null;
+            }
+            // 候选 3（无前缀混合时）：相对路径是否以 / 开头？绝对路径兜底
+            if (normalized.startsWith("/") && normalized.length() > 1) {
+                try {
+                    Path absOnly = Paths.get(normalized).normalize();
+                    if (Files.exists(absOnly) && Files.isRegularFile(absOnly)) {
+                        log.debug("[resolveFile] 命中候选3(绝对路径) path={}", absOnly);
+                        return absOnly;
+                    }
+                } catch (Exception _ignore) { /* 不是合法绝对路径，跳过 */ }
+            }
+            log.warn("[resolveFile] 未命中 path={} candidate={}", relativePath, abs);
+            return null;
         } catch (Exception e) {
             log.error("解析文件路径异常：{}", relativePath, e);
         }

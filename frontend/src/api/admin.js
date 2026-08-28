@@ -85,7 +85,9 @@ export function getResourceById(resourceId) {
 /**
  * 统一审核接口（通过或拒绝）
  * POST /api/admin/resources/review
- * body: { resourceId, reviewStatus: 1通过/2拒绝, rejectReason? }
+ * body: { resourceId, approve: true通过 / false拒绝, rejectReason?拒绝时必填 }
+ *   ⚠️ 后端真实字段：approve 是 Boolean（true/false），不是 reviewStatus 数字！
+ *      @NotNull 校验 approve：不传直接抛「审核动作不能为空」
  */
 export function reviewResource(data = {}) {
   return request.post('/admin/resources/review', data)
@@ -93,13 +95,13 @@ export function reviewResource(data = {}) {
 
 /** 页面调用：审核通过 */
 export function reviewPassResource(resourceId) {
-  return reviewResource({ resourceId, reviewStatus: 1, reviewRemark: '' })
+  return reviewResource({ resourceId, approve: true })
 }
 /** 页面调用：审核拒绝（带拒绝原因） */
 export function reviewRejectResource({ resourceId, reviewRemark }) {
   return reviewResource({
     resourceId,
-    reviewStatus: 2,
+    approve: false,
     rejectReason: reviewRemark || '不符合资源规范，请修改后重新提交'
   })
 }

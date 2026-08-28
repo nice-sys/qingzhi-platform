@@ -74,7 +74,7 @@
               </template>
             </el-table-column>
             <el-table-column label="注册时间" width="170">
-              <template #default="{ row }">{{ formatTime(row.createdAt || row.createTime) }}</template>
+              <template #default="{ row }">{{ formatTime(row.createTime || row.createdAt) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="300" fixed="right" align="right">
               <template #default="{ row }">
@@ -282,7 +282,13 @@ function onAvatarError(row) {
 
 async function fetch() {
   try {
-    const d = await listUsers({ ...query, status: query.status === '' ? undefined : query.status })
+    const params = {
+      ...query,
+      keyword: query.keyword === '' ? undefined : query.keyword,
+      role:    (query.role    === '' || query.role    === null || query.role    === undefined) ? undefined : query.role,
+      status:  (query.status  === '' || query.status  === null || query.status  === undefined) ? undefined : query.status
+    }
+    const d = await listUsers(params)
     list.value  = d.list  || []
     total.value = d.total || 0
   } catch (e) {

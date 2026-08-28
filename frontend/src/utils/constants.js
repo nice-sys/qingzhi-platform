@@ -43,10 +43,10 @@ export const REVIEW_TAG_TYPE = Object.freeze({
 })
 
 /* ============================================================
- * 3. 用户封禁状态（对齐后端 User.status：1正常 0封禁）
+ * 3. 用户封禁状态（对齐 init.sql：0-正常 1-锁定）
  * ============================================================ */
-export const USER_STATUS = Object.freeze({ NORMAL: 1, LOCKED: 0 })
-export const USER_STATUS_NAME = Object.freeze({ 1: '正常', 0: '封禁' })
+export const USER_STATUS = Object.freeze({ NORMAL: 0, LOCKED: 1 })
+export const USER_STATUS_NAME = Object.freeze({ 0: '正常', 1: '封禁' })
 
 /* ============================================================
  * 4. 课程分类（先维护一份前端枚举，后续可改成从后端拉）

@@ -63,6 +63,12 @@ public interface FileService {
     Path resolveFile(String relativePath);
 
     /**
+     * 调试暴露当前 uploadBaseDir 配置值（日志打印候选路径时调用）
+     * @return application.yml 配置的 base-dir 或默认 ./uploads
+     */
+    default String getUploadBaseDirDebug() { return "./uploads"; }
+
+    /**
      * 引用计数 -1（Resource 被删除时调用，用于释放文件关联）
      * <p>当引用计数降为 0 时，物理删除磁盘文件 + DB 记录。</p>
      *

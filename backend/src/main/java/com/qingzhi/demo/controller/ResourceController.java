@@ -8,8 +8,11 @@ import com.qingzhi.demo.exception.BusinessException;
 import com.qingzhi.demo.interceptor.JwtInterceptor;
 import com.qingzhi.demo.service.FileService;
 import com.qingzhi.demo.service.ResourceService;
+import com.qingzhi.demo.service.impl.FileServiceImpl;
 import com.qingzhi.demo.utils.FileUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -35,6 +38,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/resource")
 public class ResourceController {
+
+    private static final Logger log = LoggerFactory.getLogger(ResourceController.class);
 
     private final ResourceService resourceService;
     private final FileService fileService;
@@ -175,11 +180,27 @@ public class ResourceController {
 
         // 1. 可见性校验 + 下载计数自增（事务内原子自增）
         Resource res = resourceService.downloadResource(id, viewerId, viewerRole);
+        if (res != null) {
+            log.info("[下载开始] resourceId={}, file_path={}, file_name={}, viewerId={}",
+                    id, res.getFilePath(), res.getFileName(), viewerId);
+        }
 
         // 2. 解析磁盘绝对路径并校验
         Path absPath = fileService.resolveFile(res.getFilePath());
-        BusinessException.throwIfNull(absPath,
-                ResponseCodeEnum.FILE_NOT_FOUND, "资源文件磁盘记录缺失，请联系管理员");
+        if (absPath == null) {
+            // 日志输出真实解析路径，方便定位 baseDir 是否和上传时一致
+            try {
+                Path fallback = com.qingzhi.demo.utils.FileUtil.resolveAbsolutePath(
+                        ((FileServiceImpl) fileService).getUploadBaseDirDebug(),
+                        res.getFilePath() == null ? "" : res.getFilePath());
+                log.error("[下载失败-找不到文件] resourceId={} file_path={} 尝试解析={} exists={}",
+                        id, res.getFilePath(), fallback, java.nio.file.Files.exists(fallback));
+            } catch (Exception _e) {
+                log.error("[下载失败-找不到文件] resourceId={} file_path={}", id, res.getFilePath(), _e);
+            }
+            BusinessException.throwOf(ResponseCodeEnum.FILE_NOT_FOUND,
+                    "资源文件在服务器上不存在，请联系管理员（id=" + id + "）");
+        }
 
         java.io.File diskFile = absPath.toFile();
         BusinessException.throwIf(!diskFile.exists(),

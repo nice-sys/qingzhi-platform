@@ -67,6 +67,16 @@ public class UserInfoResponse implements Serializable {
      */
     private Integer status;
 
+    /**
+     * 创建时间（注册时间）
+     */
+    private java.time.LocalDateTime createTime;
+
+    /**
+     * 最后更新时间
+     */
+    private java.time.LocalDateTime updateTime;
+
     public UserInfoResponse() {
     }
 
@@ -91,6 +101,8 @@ public class UserInfoResponse implements Serializable {
         resp.setAvatarUrl(user.getAvatarUrl());
         resp.setRole(user.getRole());
         resp.setStatus(user.getStatus());
+        resp.setCreateTime(user.getCreateTime());
+        resp.setUpdateTime(user.getUpdateTime());
 
         RoleEnum roleEnum = user.getRoleEnum();
         if (roleEnum != null) {
@@ -185,5 +197,21 @@ public class UserInfoResponse implements Serializable {
 
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public java.time.LocalDateTime getCreateTime() {
+        return createTime;
+    }
+
+    public void setCreateTime(java.time.LocalDateTime createTime) {
+        this.createTime = createTime;
+    }
+
+    public java.time.LocalDateTime getUpdateTime() {
+        return updateTime;
+    }
+
+    public void setUpdateTime(java.time.LocalDateTime updateTime) {
+        this.updateTime = updateTime;
     }
 }
