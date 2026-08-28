@@ -188,18 +188,36 @@ public class ResourceController {
         // 2. 解析磁盘绝对路径并校验
         Path absPath = fileService.resolveFile(res.getFilePath());
         if (absPath == null) {
-            // 日志输出真实解析路径，方便定位 baseDir 是否和上传时一致
+            // 双重兜底：resolveFile 没命中时，再尝试与上传时 100% 一致的 FileUtil.resolveAbsolutePath 构造法
+            Path fallback = null;
             try {
-                Path fallback = com.qingzhi.demo.utils.FileUtil.resolveAbsolutePath(
+                fallback = com.qingzhi.demo.utils.FileUtil.resolveAbsolutePath(
                         ((FileServiceImpl) fileService).getUploadBaseDirDebug(),
                         res.getFilePath() == null ? "" : res.getFilePath());
-                log.error("[下载失败-找不到文件] resourceId={} file_path={} 尝试解析={} exists={}",
-                        id, res.getFilePath(), fallback, java.nio.file.Files.exists(fallback));
-            } catch (Exception _e) {
-                log.error("[下载失败-找不到文件] resourceId={} file_path={}", id, res.getFilePath(), _e);
+                boolean fbExists = java.nio.file.Files.exists(fallback);
+                log.warn("[下载] resolveFile 返回 null，启用 controller 兜底路径：absPath={} exists={}", fallback, fbExists);
+                if (fbExists && java.nio.file.Files.isRegularFile(fallback)) {
+                    log.info("[下载] 兜底路径存在，直接使用 fallback：{}", fallback);
+                    absPath = fallback;
+                } else {
+                    Path parent = fallback.getParent();
+                    long totalInParent = -1;
+                    if (parent != null && java.nio.file.Files.exists(parent) && java.nio.file.Files.isDirectory(parent)) {
+                        try (var s = java.nio.file.Files.list(parent)) { totalInParent = s.count(); } catch (Exception _e) { totalInParent = -2; }
+                    }
+                    log.error("[下载失败-找不到文件] resourceId={} \n  DB file_path={} \n  解析目标={} exists={} \n  父目录 {} exists={} totalFilesInDir={}",
+                            id, res.getFilePath(), fallback, fbExists,
+                            parent, (parent != null && java.nio.file.Files.exists(parent)), totalInParent);
+                    BusinessException.throwOf(ResponseCodeEnum.FILE_NOT_FOUND,
+                            "资源文件在服务器上不存在，请联系管理员（id=" + id + "，解析路径=" + fallback + "）");
+                }
+            } catch (BusinessException be) { throw be; }
+            catch (Exception _e) {
+                log.error("[下载失败-找不到文件] resourceId={} file_path={}，兜底解析异常：{}",
+                        id, res.getFilePath(), _e.getMessage(), _e);
+                BusinessException.throwOf(ResponseCodeEnum.FILE_NOT_FOUND,
+                        "资源文件在服务器上不存在，请联系管理员（id=" + id + "）");
             }
-            BusinessException.throwOf(ResponseCodeEnum.FILE_NOT_FOUND,
-                    "资源文件在服务器上不存在，请联系管理员（id=" + id + "）");
         }
 
         java.io.File diskFile = absPath.toFile();

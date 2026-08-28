@@ -39,12 +39,12 @@ public class FileServiceImpl implements FileService {
      * 本地存储根目录（原始注入值，可能是相对路径）
      */
     @Value("${qingzhi.upload.base-dir:./uploads}")
-    private String uploadBaseDirRaw;
+    private volatile String uploadBaseDirRaw;
 
     /**
      * 真实使用的绝对路径根目录（@PostConstruct 中解析计算，彻底消除 CWD 差异）
      */
-    private String uploadBaseDir;
+    private volatile String uploadBaseDir;
 
     public FileServiceImpl(FileStorageMapper fileStorageMapper) {
         this.fileStorageMapper = fileStorageMapper;
@@ -136,15 +136,67 @@ public class FileServiceImpl implements FileService {
 
         // 4b. 未命中：真实写盘 + 新增 file_storage 记录
         String relativePath = FileUtil.generateRelativePath(originalName);
+        final String realBaseDir = getResolvedUploadBaseDir();   // 保证非空，getter 内部 fallback 初始化
+        Path absPath = null;
         try {
-            Path absPath = FileUtil.resolveAbsolutePath(uploadBaseDir, relativePath);
-            try (ByteArrayInputStream bis = new ByteArrayInputStream(fileBytes)) {
-                FileUtil.saveStream(bis, absPath);
+            absPath = FileUtil.resolveAbsolutePath(realBaseDir, relativePath);
+            // 诊断日志（写盘前）：明确告诉我们「用了哪个 baseDir → 最终写到哪个磁盘路径」
+            log.warn("[上传-写盘诊断] uploaderId={}, fileName={}, realBaseDir={}, absPath={}, bytesLen={}",
+                    uploaderId, originalName, realBaseDir, absPath, fileBytes.length);
+
+            // 二次强制父目录（resolveAbsolutePath 已做过，兜底 Windows 权限问题）
+            Path parent = absPath.getParent();
+            if (parent != null && !Files.exists(parent)) {
+                Files.createDirectories(parent);
+                log.info("[上传-写盘] 补建父目录：{}", parent);
             }
+            long written;
+            try (ByteArrayInputStream bis = new ByteArrayInputStream(fileBytes)) {
+                written = FileUtil.saveStream(bis, absPath);
+            }
+            // ✅ 写盘后强验证：文件必须真实存在 + 大小必须等于上传字节数，否则强制报错（杜绝假成功）
+            boolean exists = Files.exists(absPath);
+            long sizeOnDisk = exists ? Files.size(absPath) : -1L;
+            if (!exists || sizeOnDisk != fileBytes.length) {
+                log.error("[上传-写盘失败] 文件未真实落盘！absPath={}, exists={}, sizeOnDisk={}, expected={}",
+                        absPath, exists, sizeOnDisk, fileBytes.length);
+                BusinessException.throwOf(ResponseCodeEnum.FILE_UPLOAD_FAILED,
+                        "文件写入服务器失败（已校验落盘存在性与大小不匹配）");
+            }
+            log.info("[上传-写盘成功] absPath={}, written={}, sizeOnDisk={}", absPath, written, sizeOnDisk);
+
+            // 🚨 异步二次校验（不阻塞上传接口）：写盘后 2 秒再检查一次文件是否还存在
+            // → 若 2 秒后不存在：100% 是 Windows Defender/杀毒软件把文件隔离删除了
+            final Path checkPath = absPath;
+            final long expectedSize = fileBytes.length;
+            final String diagName = originalName;
+            final Long fid = uploaderId;
+            java.lang.Thread checker = new java.lang.Thread(() -> {
+                try { Thread.sleep(2000L); } catch (InterruptedException _e) { Thread.currentThread().interrupt(); return; }
+                try {
+                    boolean still = Files.exists(checkPath);
+                    long sz = still ? Files.size(checkPath) : -1L;
+                    if (!still || sz != expectedSize) {
+                        log.error("[上传-2秒后文件消失！疑似安全软件隔离] uploaderId={}, fileName={}, absPath={} " +
+                                        "\n  刚写完时 size={}，2 秒后 exists={}, sizeOnDisk={}. " +
+                                        "\n  【建议操作】：请在 Windows 安全中心 → 病毒和威胁防护 → 保护历史记录中，" +
+                                        "将 {} 文件夹添加为「排除项」，或将被隔离的文件恢复；或临时关闭实时保护后重新上传。",
+                                fid, diagName, checkPath, expectedSize, still, sz,
+                                getResolvedUploadBaseDir());
+                    } else {
+                        log.debug("[上传-2秒后存活] 文件仍在磁盘：{}", checkPath);
+                    }
+                } catch (Exception e) {
+                    log.warn("[上传-2秒后存活检查异常] absPath={}", checkPath, e);
+                }
+            }, "UploadFileChecker-" + (checkPath.getFileName() == null ? "" : checkPath.getFileName()));
+            checker.setDaemon(true);  // JVM 退出时自动销毁，不会卡住 SpringBoot shutdown
+            checker.start();
         } catch (IOException e) {
-            log.error("保存上传文件到磁盘失败 [uploaderId={}, fileName={}, path={}]",
-                    uploaderId, originalName, relativePath, e);
-            BusinessException.throwOf(ResponseCodeEnum.FILE_UPLOAD_FAILED, "保存上传文件失败");
+            log.error("保存上传文件到磁盘失败 [uploaderId={}, fileName={}, path={}, absPath={}]",
+                    uploaderId, originalName, relativePath, absPath, e);
+            BusinessException.throwOf(ResponseCodeEnum.FILE_UPLOAD_FAILED,
+                    "保存上传文件失败（" + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()) + "）");
         }
 
         FileStorage storage = new FileStorage();
@@ -180,57 +232,145 @@ public class FileServiceImpl implements FileService {
     }
 
     @Override
-    public String getUploadBaseDirDebug() { return uploadBaseDir; }
+    public String getUploadBaseDirDebug() { return getResolvedUploadBaseDir(); }
+
+    /**
+     * 保证永远返回非空的绝对路径根目录
+     * <p>即使 @PostConstruct init() 因 Bean 生命周期问题没执行，也 fallback 计算一次。</p>
+     */
+    private String getResolvedUploadBaseDir() {
+        String cur = this.uploadBaseDir;
+        if (cur != null && !cur.isEmpty()) return cur;
+        synchronized (this) {
+            cur = this.uploadBaseDir;
+            if (cur != null && !cur.isEmpty()) return cur;
+            String raw = (this.uploadBaseDirRaw == null) ? "./uploads" : this.uploadBaseDirRaw.trim();
+            Path p = Paths.get(raw);
+            if (!p.isAbsolute()) {
+                String anchor = System.getenv("QINGZHI_PROJECT_ROOT");
+                if (anchor == null || anchor.isEmpty()) {
+                    String userDir = System.getProperty("user.dir");
+                    if (userDir != null && !userDir.isEmpty()) {
+                        Path ud = Paths.get(userDir);
+                        if (ud.getFileName() != null && "backend".equalsIgnoreCase(ud.getFileName().toString())) {
+                            Path parent = ud.getParent();
+                            anchor = (parent != null) ? parent.toString() : userDir;
+                        } else {
+                            anchor = userDir;
+                        }
+                    } else {
+                        anchor = ".";
+                    }
+                }
+                p = Paths.get(anchor, raw).normalize().toAbsolutePath();
+            }
+            cur = p.toString();
+            this.uploadBaseDir = cur;
+            log.warn("[文件存储] fallback 初始化根目录：raw={} → abs={}", raw, cur);
+            try { if (!Files.exists(p)) Files.createDirectories(p); }
+            catch (IOException e) { log.warn("[文件存储] fallback 创建目录失败：{}", cur, e); }
+            return cur;
+        }
+    }
 
     @Override
     public Path resolveFile(String relativePath) {
         if (relativePath == null || relativePath.isEmpty()) return null;
         try {
-            // 候选 1：直接 baseDir + relativePath（大多数情况）
-            Path abs = Paths.get(uploadBaseDir, relativePath).normalize();
+            final String realBaseDir = getResolvedUploadBaseDir();
+            final String normalized = relativePath.replace('\\', '/');
+
+            // 候选 1（关键！与上传时 100% 同一 API：FileUtil.resolveAbsolutePath）
+            Path abs = FileUtil.resolveAbsolutePath(realBaseDir, normalized);
             if (Files.exists(abs) && Files.isRegularFile(abs)) {
-                log.debug("[resolveFile] 命中候选1 path={}", abs);
+                log.debug("[resolveFile] 命中候选1(标准方法) path={}", abs);
                 return abs;
             }
-            // 候选 2：把 Windows 反斜杠 \ 统一转为 /（常见因 URL/表单拼接留下的混合）
-            String normalized = relativePath.replace('\\', '/');
-            if (!normalized.equals(relativePath)) {
-                Path abs2 = Paths.get(uploadBaseDir, normalized).normalize();
+
+            // 候选 2：去掉开头 "uploads/" 前缀（历史数据可能多一层）
+            if (normalized.startsWith("uploads/")) {
+                Path abs2 = FileUtil.resolveAbsolutePath(realBaseDir, normalized.substring("uploads/".length()));
                 if (Files.exists(abs2) && Files.isRegularFile(abs2)) {
-                    log.debug("[resolveFile] 命中候选2 path={}", abs2);
+                    log.debug("[resolveFile] 命中候选2(去掉uploads前缀) path={}", abs2);
                     return abs2;
                 }
-                // 候选 3：去掉开头的 uploads/ 前缀（有的版本存储会多写一层）
-                if (normalized.startsWith("uploads/")) {
-                    Path abs3 = Paths.get(uploadBaseDir, normalized.substring("uploads/".length())).normalize();
-                    if (Files.exists(abs3) && Files.isRegularFile(abs3)) {
-                        log.debug("[resolveFile] 命中候选3 path={}", abs3);
-                        return abs3;
-                    }
-                    log.warn("[resolveFile] 都未命中 path={} candidates=[{} , {} , {}]",
-                            relativePath, abs, abs2, abs3);
-                    return null;
-                }
-                log.warn("[resolveFile] 都未命中 path={} candidates=[{} , {}]",
-                        relativePath, abs, abs2);
+                // 详细诊断：父目录是否存在 + 同目录下是否有其他文件（区分「整个目录消失 vs 单个文件被隔离」）
+                Path parent = abs2.getParent();
+                String prefix = extractFilePrefix(normalized);
+                int similar = countSimilar(parent, prefix);
+                int total  = countTotal(parent);
+                log.warn("[resolveFile] 都未命中(含前缀诊断) path={} \n  候选1(FileUtil法) = {} exists={} \n  候选2(去前缀)   = {} exists={} \n  父目录 {} exists={}  totalFiles={}  uuid前缀匹配数={}",
+                        relativePath, abs, Files.exists(abs), abs2, Files.exists(abs2),
+                        parent, (parent != null && Files.exists(parent)), total, similar);
                 return null;
             }
-            // 候选 3（无前缀混合时）：相对路径是否以 / 开头？绝对路径兜底
-            if (normalized.startsWith("/") && normalized.length() > 1) {
+
+            // 候选 3：normalized 本身是绝对路径（Windows 盘符开头 D:/ 或 Linux /）
+            boolean looksAbs = normalized.length() > 2 && normalized.charAt(1) == ':'
+                    || normalized.startsWith("/");
+            if (looksAbs) {
                 try {
-                    Path absOnly = Paths.get(normalized).normalize();
+                    Path absOnly = Paths.get(normalized).normalize().toAbsolutePath();
                     if (Files.exists(absOnly) && Files.isRegularFile(absOnly)) {
-                        log.debug("[resolveFile] 命中候选3(绝对路径) path={}", absOnly);
+                        log.debug("[resolveFile] 命中候选3(本身绝对路径) path={}", absOnly);
                         return absOnly;
                     }
-                } catch (Exception _ignore) { /* 不是合法绝对路径，跳过 */ }
+                } catch (Exception _ignore) { /* 非法绝对路径格式跳过 */ }
             }
-            log.warn("[resolveFile] 未命中 path={} candidate={}", relativePath, abs);
+
+            // 通用详细诊断（normalized 不含 uploads/ 前缀时）
+            Path parent = abs.getParent();
+            String prefix = extractFilePrefix(normalized);
+            int similar = countSimilar(parent, prefix);
+            int total  = countTotal(parent);
+            log.warn("[resolveFile] 未命中(含详细诊断) path={} \n  候选1(FileUtil法) = {} exists={} \n  父目录 {} exists={}  totalFiles={}  uuid前缀匹配数={}",
+                    relativePath, abs, Files.exists(abs),
+                    parent, (parent != null && Files.exists(parent)), total, similar);
             return null;
         } catch (Exception e) {
             log.error("解析文件路径异常：{}", relativePath, e);
         }
         return null;
+    }
+
+    /** 从相对路径末尾提取文件名（不含扩展名）的前 8 位，用于安全软件隔离后的相似匹配诊断 */
+    private static String extractFilePrefix(String normalized) {
+        if (normalized == null) return "";
+        int slash = normalized.lastIndexOf('/');
+        String name = (slash < 0) ? normalized : normalized.substring(slash + 1);
+        int dot = name.lastIndexOf('.');
+        String base = (dot < 0) ? name : name.substring(0, dot);
+        return base.length() > 8 ? base.substring(0, 8) : base;
+    }
+    private static int countTotal(Path parent) {
+        if (parent == null || !Files.exists(parent) || !Files.isDirectory(parent)) return -1;
+        try (var s = Files.list(parent)) { return (int) s.count(); } catch (IOException e) { return -2; }
+    }
+    private static int countSimilar(Path parent, String prefix) {
+        if (parent == null || prefix == null || prefix.isEmpty()
+                || !Files.exists(parent) || !Files.isDirectory(parent)) return -1;
+        try (var s = Files.list(parent)) {
+            return (int) s.filter(p -> {
+                String n = p.getFileName() == null ? "" : p.getFileName().toString();
+                return n.startsWith(prefix);
+            }).count();
+        } catch (IOException e) { return -2; }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void increaseReference(Long fileStorageId) {
+        if (fileStorageId == null || fileStorageId <= 0) return;
+        FileStorage existing = fileStorageMapper.selectById(fileStorageId);
+        if (existing == null) {
+            log.warn("[increaseReference] fileStorageId 不存在，忽略：{}", fileStorageId);
+            return;
+        }
+        int rows = fileStorageMapper.incrementReferenceCount(fileStorageId);
+        FileStorage updated = fileStorageMapper.selectById(fileStorageId);
+        log.info("[increaseReference] fileStorageId={}, 原引用={}, 新引用={}, rows={}",
+                fileStorageId, existing.getReferenceCount(),
+                updated == null ? null : updated.getReferenceCount(), rows);
     }
 
     @Override

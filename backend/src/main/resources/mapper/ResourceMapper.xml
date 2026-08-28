@@ -203,10 +203,10 @@
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="title != null and title != ''">title,</if>
             <if test="description != null">description,</if>
-            <if test="course != null and course != ''">course,</if>
+            <if test="course != null">course,</if>
             <if test="uploaderId != null">uploader_id,</if>
-            <if test="fileName != null and fileName != ''">file_name,</if>
-            <if test="filePath != null and filePath != ''">file_path,</if>
+            <if test="fileName != null">file_name,</if>
+            <if test="filePath != null">file_path,</if>
             <if test="fileSize != null">file_size,</if>
             <if test="fileExt != null">file_ext,</if>
             <if test="fileHash != null">file_hash,</if>
@@ -219,10 +219,10 @@
         <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
             <if test="title != null and title != ''">#{title},</if>
             <if test="description != null">#{description},</if>
-            <if test="course != null and course != ''">#{course},</if>
+            <if test="course != null">#{course},</if>
             <if test="uploaderId != null">#{uploaderId},</if>
-            <if test="fileName != null and fileName != ''">#{fileName},</if>
-            <if test="filePath != null and filePath != ''">#{filePath},</if>
+            <if test="fileName != null">#{fileName},</if>
+            <if test="filePath != null">#{filePath},</if>
             <if test="fileSize != null">#{fileSize},</if>
             <if test="fileExt != null">#{fileExt},</if>
             <if test="fileHash != null">#{fileHash},</if>
@@ -246,10 +246,10 @@
         <trim prefix="SET" suffixOverrides=",">
             <if test="title != null and title != ''">title = #{title},</if>
             <if test="description != null">description = #{description},</if>
-            <if test="course != null and course != ''">course = #{course},</if>
+            <if test="course != null">course = #{course},</if>
             <if test="uploaderId != null">uploader_id = #{uploaderId},</if>
-            <if test="fileName != null and fileName != ''">file_name = #{fileName},</if>
-            <if test="filePath != null and filePath != ''">file_path = #{filePath},</if>
+            <if test="fileName != null">file_name = #{fileName},</if>
+            <if test="filePath != null">file_path = #{filePath},</if>
             <if test="fileSize != null">file_size = #{fileSize},</if>
             <if test="fileExt != null">file_ext = #{fileExt},</if>
             <if test="fileHash != null">file_hash = #{fileHash},</if>

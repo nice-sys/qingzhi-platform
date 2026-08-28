@@ -408,10 +408,9 @@ async function submit() {
     } else {
       await publishResource({ ...form })
       ElMessage.success('发布成功，等待管理员审核')
-      // 发布成功后，删除对应的后端草稿（如果存在）
-      if (draftId.value > 0) {
-        try { await deleteDraft(draftId.value) } catch (_) {}
-      }
+      // 发布成功后，不再主动删除后端草稿（避免触发 releaseReference 引用计数归零误删磁盘文件）
+      // - 草稿保留在「我的草稿」页面，用户可自行手动删除或再次基于草稿发布
+      // - 仅清除 localStorage 本地草稿（form 输入内容的临时保存）
       clearDraft()
       router.replace('/profile/resources')
     }

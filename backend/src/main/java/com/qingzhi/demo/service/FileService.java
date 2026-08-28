@@ -75,4 +75,13 @@ public interface FileService {
      * @param fileStorageId file_storage.id
      */
     void releaseReference(Long fileStorageId);
+
+    /**
+     * 引用计数 +1（Resource 新建时若复用已存在的 FileStorage，需手动增加计数）
+     * <p>场景示例：草稿 saveDraft 已持有 reference=1，publishResource 新建正式资源复用同 fileStorageId，
+     * 此时必须 +1 使引用计数=2，后续草稿被 deleteDraft 时 releaseReference 只减到 1，不会误删磁盘文件。</p>
+     *
+     * @param fileStorageId file_storage.id
+     */
+    void increaseReference(Long fileStorageId);
 }

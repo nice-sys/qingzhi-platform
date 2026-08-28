@@ -47,6 +47,23 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     /* ====================================================================================
+     * 公共工具：保证 NOT NULL 列（course/fileName/filePath/fileSize/fileExt/fileHash）永不为 null
+     * - resource.course / file_name / file_path 三列 DB NOT NULL 且无 DEFAULT
+     * - fileSize / fileExt / fileHash 虽然 DB 允许 NULL，但统一设默认值避免前端显示 null
+     * - description 是 TEXT 类型允许 NULL，但为了避免后续 updateById 空判断歧义也统一为空串
+     * ==================================================================================== */
+    private static void ensureNotNullColumns(Resource r) {
+        if (r == null) return;
+        if (r.getCourse()     == null) r.setCourse("");
+        if (r.getFileName()   == null) r.setFileName("");
+        if (r.getFilePath()   == null) r.setFilePath("");
+        if (r.getFileExt()    == null) r.setFileExt("");
+        if (r.getFileHash()   == null) r.setFileHash("");
+        if (r.getFileSize()   == null) r.setFileSize(0L);
+        if (r.getDescription()== null) r.setDescription("");
+    }
+
+    /* ====================================================================================
      * 一、发布资源
      * ==================================================================================== */
 
@@ -93,6 +110,22 @@ public class ResourceServiceImpl implements ResourceService {
             }
         }
 
+        // 2b. ✅ 关键：只要 form 里有有效 fileStorageId，就给引用计数 +1
+        // （草稿 saveDraft 已持有 reference=1；新建正式资源复用同 fileStorage → 引用计数必须 >=2；
+        //  后续即使前端 deleteDraft 调了 releaseReference，减 1 后至少是 1，不会误删磁盘文件）
+        Long finalStorageId = (resourceDto.getFileStorageId() != null && resourceDto.getFileStorageId() > 0)
+                ? resourceDto.getFileStorageId()
+                : null;
+        if (finalStorageId != null) {
+            // 再次校验存在性，避免非法 id
+            FileStorage fs = fileService.getFileStorageById(finalStorageId);
+            if (fs == null) {
+                BusinessException.throwOf(ResponseCodeEnum.FILE_NOT_FOUND,
+                        "关联的文件不存在(fileStorageId=" + finalStorageId + ")");
+            }
+            fileService.increaseReference(finalStorageId);
+        }
+
         // 3. 最终文件校验（filePath + fileName 必传）
         BusinessException.throwIfBlank(resourceDto.getFilePath(),
                 ResponseCodeEnum.PARAM_ERROR, "请先上传文件后再发布资源（filePath 必填，或传 fileStorageId 自动关联）");
@@ -118,6 +151,7 @@ public class ResourceServiceImpl implements ResourceService {
         insert.setRejectReason(null);
         insert.setReviewAdminId(null);
         insert.setReviewTime(null);
+        ensureNotNullColumns(insert);   // ✅ 数据库 NOT NULL 列强制兜底（永不为 null → <if test="x!=null"> 一定命中）
 
         int rows = resourceMapper.insert(insert);
         BusinessException.throwIf(rows <= 0 || insert.getId() == null,
@@ -508,6 +542,7 @@ public class ResourceServiceImpl implements ResourceService {
                 update.setFileHash(body.getFileHash());
                 update.setFileStorageId(body.getFileStorageId());
             }
+            ensureNotNullColumns(update);    // ✅ NOT NULL 列强制兜底（动态 SET 里 if!=null 一定命中）
             int rows = resourceMapper.updateById(update);
             BusinessException.throwIf(rows <= 0, ResponseCodeEnum.FAILURE, "草稿保存失败");
             log.info("草稿更新成功：draftId={}, operatorId={}", draftId, operatorId);
@@ -533,6 +568,7 @@ public class ResourceServiceImpl implements ResourceService {
             insert.setRejectReason(null);
             insert.setReviewAdminId(null);
             insert.setReviewTime(null);
+            ensureNotNullColumns(insert);    // ✅ NOT NULL 列强制兜底（DB NOT NULL 列 <if> 100% 命中）
 
             int rows = resourceMapper.insert(insert);
             BusinessException.throwIf(rows <= 0 || insert.getId() == null,
