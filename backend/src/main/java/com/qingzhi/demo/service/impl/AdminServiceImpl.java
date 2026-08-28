@@ -326,10 +326,19 @@ public class AdminServiceImpl implements AdminService {
         query.normalize();
 
         // 2. 总数
-        long total = resourceMapper.countResources(
+        //    ⚠️ 关键：如果前端没传 reviewStatus（tab=all），默认排除草稿（DRAFT=3）
+        //    草稿属于"未提交审核"，不应该出现在管理员审核列表或全局资源管理中，避免混淆
+        Integer reviewStatus = query.getReviewStatus();
+        int draftCode = ReviewStatusEnum.DRAFT.getCode();
+        boolean excludeDraft = (reviewStatus == null
+                || draftCode != (reviewStatus == null ? -1 : reviewStatus));
+        Integer excludeDraftStatus = excludeDraft ? draftCode : null;
+
+        long total = resourceMapper.countResourcesExcludeStatus(
                 query.getKeyword(),
                 query.getCourse(),
-                query.getReviewStatus(),
+                reviewStatus,
+                excludeDraftStatus,
                 query.getUploaderId(),
                 query.getStartDate(),
                 query.getEndDate()
@@ -339,10 +348,11 @@ public class AdminServiceImpl implements AdminService {
         }
 
         // 3. 分页列表
-        List<Resource> list = resourceMapper.selectResourcesPage(
+        List<Resource> list = resourceMapper.selectResourcesPageExcludeStatus(
                 query.getKeyword(),
                 query.getCourse(),
-                query.getReviewStatus(),
+                reviewStatus,
+                excludeDraftStatus,
                 query.getUploaderId(),
                 query.getStartDate(),
                 query.getEndDate(),

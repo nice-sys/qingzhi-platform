@@ -24,6 +24,18 @@ public interface ResourceMapper {
                         @Param("endDate") LocalDate endDate);
 
     /**
+     * 按条件统计资源总数（带排除状态）
+     * @param excludeStatus 不等于此状态的资源（如：管理员列表默认排除 DRAFT=3 草稿，避免混淆）
+     */
+    long countResourcesExcludeStatus(@Param("keyword") String keyword,
+                                     @Param("course") String course,
+                                     @Param("reviewStatus") Integer reviewStatus,
+                                     @Param("excludeStatus") Integer excludeStatus,
+                                     @Param("uploaderId") Long uploaderId,
+                                     @Param("startDate") LocalDate startDate,
+                                     @Param("endDate") LocalDate endDate);
+
+    /**
      * 按条件分页查询资源列表（按 create_time DESC，即发布时间倒序）
      */
     List<Resource> selectResourcesPage(@Param("keyword") String keyword,
@@ -34,6 +46,19 @@ public interface ResourceMapper {
                                        @Param("endDate") LocalDate endDate,
                                        @Param("offset") int offset,
                                        @Param("pageSize") int pageSize);
+
+    /**
+     * 按条件分页查询资源列表（带排除状态，避免 DRAFT 草稿出现在公开/管理列表）
+     */
+    List<Resource> selectResourcesPageExcludeStatus(@Param("keyword") String keyword,
+                                                    @Param("course") String course,
+                                                    @Param("reviewStatus") Integer reviewStatus,
+                                                    @Param("excludeStatus") Integer excludeStatus,
+                                                    @Param("uploaderId") Long uploaderId,
+                                                    @Param("startDate") LocalDate startDate,
+                                                    @Param("endDate") LocalDate endDate,
+                                                    @Param("offset") int offset,
+                                                    @Param("pageSize") int pageSize);
 
     /**
      * 根据主键查询资源

@@ -319,10 +319,18 @@ public class ResourceServiceImpl implements ResourceService {
             throw new BusinessException(ResponseCodeEnum.PARAM_ERROR.getCode(), "非法的审核状态值");
         }
 
-        long total = resourceMapper.countResources(
+        // ⚠️ 关键：我的资源列表默认排除草稿（DRAFT=3），草稿专属入口是 /profile/drafts
+        //    只有当用户显式传 reviewStatus=3 时才查询草稿（一般前端不会传）
+        int draftCode = ReviewStatusEnum.DRAFT.getCode();
+        Integer excludeDraft = (reviewStatus == null
+                || draftCode != (reviewStatus == null ? -1 : reviewStatus))
+                ? draftCode : null;
+
+        long total = resourceMapper.countResourcesExcludeStatus(
                 normalizeLikeKeyword(keyword),
                 blankToNull(course),
                 reviewStatus,
+                excludeDraft,
                 uploaderId,
                 startDate,
                 endDate);
@@ -332,10 +340,11 @@ public class ResourceServiceImpl implements ResourceService {
         }
 
         int offset = (pageNum - 1) * pageSize;
-        List<Resource> records = resourceMapper.selectResourcesPage(
+        List<Resource> records = resourceMapper.selectResourcesPageExcludeStatus(
                 normalizeLikeKeyword(keyword),
                 blankToNull(course),
                 reviewStatus,
+                excludeDraft,
                 uploaderId,
                 startDate,
                 endDate,

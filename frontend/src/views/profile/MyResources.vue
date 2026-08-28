@@ -13,8 +13,16 @@
       <template #list>
         <el-table :data="list" stripe>
           <el-table-column prop="title" label="标题" min-width="260" show-overflow-tooltip />
-          <el-table-column prop="category" label="分类" width="120" />
-          <el-table-column prop="type" label="类型" width="100" />
+          <el-table-column label="分类" width="120">
+            <template #default="{ row }">
+              <span :class="!row.course ? 'text-muted' : ''">{{ row.course || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="类型" width="100">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ formatFileExt(row.fileExt, row.fileName) }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="状态" width="110">
             <template #default="{ row }">
               <StatusTag :status="row.reviewStatus" kind="review" />
@@ -23,7 +31,7 @@
           <el-table-column prop="downloadCount" label="下载" width="90" />
           <el-table-column prop="favoriteCount" label="收藏" width="80" />
           <el-table-column label="更新时间" width="170">
-            <template #default="{ row }">{{ formatTime(row.updatedAt) }}</template>
+            <template #default="{ row }">{{ formatTime(row.updateTime || row.updatedAt) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="210" fixed="right" align="right">
             <template #default="{ row }">
@@ -62,6 +70,12 @@ const list = ref([])
 const total = ref(0)
 const query = reactive({ page: 1, size: 10 })
 const formatTime = formatDateTime
+
+function formatFileExt(ext, name) {
+  if (ext && ext.trim()) return ext.trim().toUpperCase()
+  if (name && name.includes('.')) return name.split('.').pop().toUpperCase()
+  return '—'
+}
 
 async function fetch() {
   try {

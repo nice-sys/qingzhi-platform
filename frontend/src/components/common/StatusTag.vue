@@ -25,7 +25,8 @@ const props = defineProps({
 const REVIEW_TEXT = {
   [REVIEW.PENDING]: '待审核',
   [REVIEW.PASS]:    '已通过',
-  [REVIEW.REJECT]:  '已拒绝'
+  [REVIEW.REJECT]:  '已拒绝',
+  3:                '草稿'
 }
 const TEXT_MAP = { review: REVIEW_TEXT }
 
@@ -35,6 +36,7 @@ const tagType = computed(() => {
     if (Number(props.status) === REVIEW.PENDING) return 'warning'
     if (Number(props.status) === REVIEW.PASS)    return 'success'
     if (Number(props.status) === REVIEW.REJECT)  return 'danger'
+    if (Number(props.status) === 3)              return 'info'
   }
   return 'info'
 })

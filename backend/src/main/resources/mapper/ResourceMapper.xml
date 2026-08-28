@@ -63,6 +63,41 @@
     </select>
 
     <!-- ============================================================
+         1.1 按条件统计资源总数（带排除状态）
+         - excludeStatus 不为 null 时，追加 review_status != #{excludeStatus}
+         - 主要用于：管理员全局列表默认排除 DRAFT(3) 草稿，避免混淆
+         ============================================================ -->
+    <select id="countResourcesExcludeStatus" parameterType="map" resultType="long">
+        SELECT COUNT(1)
+        FROM resource
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (title LIKE CONCAT('%', #{keyword}, '%')
+                     OR description LIKE CONCAT('%', #{keyword}, '%')
+                     OR course LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="course != null and course != ''">
+                AND course LIKE CONCAT('%', #{course}, '%')
+            </if>
+            <if test="reviewStatus != null">
+                AND review_status = #{reviewStatus}
+            </if>
+            <if test="excludeStatus != null">
+                AND review_status != #{excludeStatus}
+            </if>
+            <if test="uploaderId != null">
+                AND uploader_id = #{uploaderId}
+            </if>
+            <if test="startDate != null">
+                AND create_time <![CDATA[>=]]> CONCAT(#{startDate}, ' 00:00:00')
+            </if>
+            <if test="endDate != null">
+                AND create_time <![CDATA[<]]> CONCAT(DATE_ADD(#{endDate}, INTERVAL 1 DAY), ' 00:00:00')
+            </if>
+        </where>
+    </select>
+
+    <!-- ============================================================
          2. 按条件分页查询资源列表（按发布时间倒序）
          ============================================================ -->
     <select id="selectResourcesPage" parameterType="map" resultMap="ResourceResultMap">
@@ -80,6 +115,42 @@
             </if>
             <if test="reviewStatus != null">
                 AND review_status = #{reviewStatus}
+            </if>
+            <if test="uploaderId != null">
+                AND uploader_id = #{uploaderId}
+            </if>
+            <if test="startDate != null">
+                AND create_time <![CDATA[>=]]> CONCAT(#{startDate}, ' 00:00:00')
+            </if>
+            <if test="endDate != null">
+                AND create_time <![CDATA[<]]> CONCAT(DATE_ADD(#{endDate}, INTERVAL 1 DAY), ' 00:00:00')
+            </if>
+        </where>
+        ORDER BY create_time DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <!-- ============================================================
+         2.1 按条件分页查询资源列表（带排除状态）
+         ============================================================ -->
+    <select id="selectResourcesPageExcludeStatus" parameterType="map" resultMap="ResourceResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM resource
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (title LIKE CONCAT('%', #{keyword}, '%')
+                     OR description LIKE CONCAT('%', #{keyword}, '%')
+                     OR course LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="course != null and course != ''">
+                AND course LIKE CONCAT('%', #{course}, '%')
+            </if>
+            <if test="reviewStatus != null">
+                AND review_status = #{reviewStatus}
+            </if>
+            <if test="excludeStatus != null">
+                AND review_status != #{excludeStatus}
             </if>
             <if test="uploaderId != null">
                 AND uploader_id = #{uploaderId}

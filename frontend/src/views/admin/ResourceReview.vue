@@ -63,8 +63,18 @@
             />
             <el-table-column prop="id" label="ID" width="80" />
             <el-table-column prop="title" label="标题" min-width="240" show-overflow-tooltip />
-            <el-table-column prop="category" label="分类" width="120" />
-            <el-table-column prop="type" label="类型" width="100" />
+            <el-table-column label="分类" width="120">
+              <template #default="{ row }">
+                <span :class="!row.course ? 'text-muted' : ''">{{ row.course || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="类型" width="100">
+              <template #default="{ row }">
+                <el-tag size="small" effect="plain" :type="fileExtTagType(row.fileExt)">
+                  {{ formatFileExt(row.fileExt, row.fileName) }}
+                </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="上传者" width="220">
               <template #default="{ row }">
                 <div class="flex items-center gap-6">
@@ -83,7 +93,7 @@
               <template #default="{ row }"><StatusTag :status="row.reviewStatus" /></template>
             </el-table-column>
             <el-table-column label="提交时间" width="170">
-              <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
+              <template #default="{ row }">{{ formatTime(row.createTime || row.createdAt) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="260" fixed="right">
               <template #default="{ row }">
@@ -185,6 +195,22 @@ function roleTagColor(role) {
        : 'var(--qz-role-student)'
 }
 function roleTagLabel(role) { return ROLE_NAME[Number(role)] || '' }
+
+function formatFileExt(ext, name) {
+  if (ext && ext.trim()) return ext.trim().toUpperCase()
+  if (name && name.includes('.')) return name.split('.').pop().toUpperCase()
+  return '未知'
+}
+function fileExtTagType(ext) {
+  const e = (ext || '').toLowerCase()
+  if (['pdf'].includes(e)) return 'danger'
+  if (['doc', 'docx', 'txt', 'rtf'].includes(e)) return 'primary'
+  if (['xls', 'xlsx', 'csv'].includes(e)) return 'success'
+  if (['ppt', 'pptx'].includes(e)) return 'warning'
+  if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'].includes(e)) return 'info'
+  if (['zip', 'rar', '7z'].includes(e)) return ''
+  return ''
+}
 
 async function fetch() {
   try {
