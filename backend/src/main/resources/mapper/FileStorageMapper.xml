@@ -94,4 +94,17 @@
         DELETE FROM file_storage WHERE id = #{id}
     </delete>
 
+    <!-- ============================================================
+         7. 按主键更新文件路径/大小/引用计数
+         用于秒传命中但磁盘文件已丢失/损坏时：重新写盘后，把原 DB 死记录校正回来
+         ============================================================ -->
+    <update id="updatePathAndSize">
+        UPDATE file_storage
+        SET file_path       = #{newFilePath},
+            file_size       = #{newFileSize},
+            reference_count = #{resetReference},
+            create_time     = NOW()
+        WHERE id = #{id}
+    </update>
+
 </mapper>

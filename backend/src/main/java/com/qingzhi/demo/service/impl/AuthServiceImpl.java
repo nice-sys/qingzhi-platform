@@ -110,8 +110,9 @@ public class AuthServiceImpl implements AuthService {
         // 4. 密码正确 → 重置登录失败信息，解锁账号
         userMapper.resetLoginFailInfo(user.getId());
 
-        // 5. 生成 JWT Token
-        String token = jwtUtil.generateToken(user.getId(), user.getRole(), user.getUsername());
+        // 5. 生成 JWT Token（支持「记住我」策略：true = 7 天，false = 2 小时）
+        String token = jwtUtil.generateToken(user.getId(), user.getRole(), user.getUsername(),
+                request.isRememberMe());
 
         // 6. 返回 Token + 脱敏用户信息
         UserInfoResponse userInfo = UserInfoResponse.fromEntity(user);

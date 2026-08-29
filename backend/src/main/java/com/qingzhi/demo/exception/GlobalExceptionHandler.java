@@ -114,7 +114,7 @@ public class GlobalExceptionHandler {
 
     /**
      * 处理文件上传大小超限异常（对应 PRD 5001 错误码）
-     * <p>当上传的文件超过 application.yml 中配置的 max-file-size（50MB）时触发</p>
+     * <p>当上传的文件超过 application.yml 中配置的 max-file-size（100MB）时触发</p>
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public Result<Void> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {

@@ -86,6 +86,7 @@
               @click="goDetail(r)"
               @toggle-favorite="toggleFav"
               @quick-download="onQuickDownload"
+              @preview="onQuickPreview"
             />
           </el-col>
         </el-row>
@@ -109,7 +110,7 @@ import Pagination     from '@/components/common/Pagination.vue'
 import EmptyState     from '@/components/common/EmptyState.vue'
 import { ElMessage } from 'element-plus'
 import { InfoFilled, Upload } from '@element-plus/icons-vue'
-import { listResource, downloadResource } from '@/api/resource'
+import { listResource, downloadResource, isPreviewSupported, buildPreviewUrl } from '@/api/resource'
 import { addFavorite, removeFavorite, listMyFavorites } from '@/api/favorite'
 import { ROLE_OPTIONS, CATEGORIES, RESOURCE_TYPE_OPTIONS } from '@/utils/constants'
 import { ROLE_NAME } from '@/utils/permission'
@@ -230,6 +231,18 @@ async function onQuickDownload(r) {
     } else {
       ElMessage.warning(e?.message || '下载失败，请稍后重试')
     }
+  }
+}
+
+function onQuickPreview(r) {
+  if (Number(r.reviewStatus) !== 1) {
+    ElMessage.warning('该资源尚未通过审核，暂不可预览')
+    return
+  }
+  if (isPreviewSupported(r)) {
+    window.open(buildPreviewUrl(r.id), '_blank', 'noopener,noreferrer')
+  } else {
+    ElMessage.warning('该格式暂不支持在线预览，请下载查看')
   }
 }
 

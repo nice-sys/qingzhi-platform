@@ -69,9 +69,28 @@ public class JwtInterceptor implements HandlerInterceptor {
             }
         }
 
-        // 3. 从 Header 获取 Token
+        // 3. 获取 Token：支持 3 种来源（优先级从上到下）
+        //      ① HTTP Header：Authorization: Bearer <token>（axios 统一）
+        //      ② Query 参数：?token=<token>（window.open 在线预览新标签页场景，因为新标签页无法带自定义 header）
+        //      ③ Cookie：暂不使用
         String header = request.getHeader(jwtConfig.getHeaderName());
-        if (header == null || header.isEmpty()) {
+        String token = null;
+        String source = null;
+        if (header != null && !header.isEmpty()) {
+            if (header.startsWith(jwtConfig.getTokenPrefix())) {
+                token = header.substring(jwtConfig.getTokenPrefix().length());
+            } else {
+                token = header; // 兼容不带前缀的请求
+            }
+            source = "HEADER";
+        } else {
+            String qp = request.getParameter("token");
+            if (qp != null && !qp.isEmpty()) {
+                token = qp;
+                source = "QUERY";
+            }
+        }
+        if (token == null || token.isEmpty()) {
             // 公开 GET 接口：匿名放行
             if (isPublicGet) {
                 return true;
@@ -80,21 +99,7 @@ public class JwtInterceptor implements HandlerInterceptor {
             throw new BusinessException(ResponseCodeEnum.NOT_LOGGED_IN);
         }
 
-        // 4. 移除 Token 前缀（Bearer）
-        String token;
-        if (header.startsWith(jwtConfig.getTokenPrefix())) {
-            token = header.substring(jwtConfig.getTokenPrefix().length());
-        } else {
-            token = header; // 兼容不带前缀的请求
-        }
-        if (token.isEmpty()) {
-            if (isPublicGet) {
-                return true;
-            }
-            throw new BusinessException(ResponseCodeEnum.NOT_LOGGED_IN);
-        }
-
-        // 5. 解析 Token（此处会自动校验签名与过期时间）
+        // 4. 解析 Token（此处会自动校验签名与过期时间）
         Claims claims;
         try {
             claims = jwtUtil.parseToken(token);
@@ -105,8 +110,12 @@ public class JwtInterceptor implements HandlerInterceptor {
             }
             throw new BusinessException(ResponseCodeEnum.NOT_LOGGED_IN);
         }
+        if (claims == null) {
+            if (isPublicGet) return true;
+            throw new BusinessException(ResponseCodeEnum.NOT_LOGGED_IN);
+        }
 
-        // 6. 将解析出的用户信息存入 request 属性，供业务层使用
+        // 5. 将解析出的用户信息存入 request 属性，供业务层使用
         Long userId = claims.get(jwtConfig.getClaimUserId(), Long.class);
         Integer role = claims.get(jwtConfig.getClaimRole(), Integer.class);
         String username = claims.get(jwtConfig.getClaimUsername(), String.class);
@@ -114,6 +123,8 @@ public class JwtInterceptor implements HandlerInterceptor {
         request.setAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ID, userId);
         request.setAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ROLE, role);
         request.setAttribute("currentUsername", username);
+        // 调试辅助（不打 token 值）：知道从哪种来源拿的 token，排查预览/下载问题更快
+        request.setAttribute("currentTokenSource", source);
 
         return true;
     }

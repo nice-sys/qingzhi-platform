@@ -139,6 +139,18 @@
 
             <div class="action-group">
               <el-button
+                type="success"
+                plain
+                size="large"
+                class="w-full mb-8"
+                :disabled="!(Number(detail.reviewStatus) === REVIEW.PASS || canEdit)"
+                :title="!(Number(detail.reviewStatus) === REVIEW.PASS || canEdit) ? '当前状态不支持预览' : '在线预览'"
+                @click="doPreview"
+              >
+                <el-icon><View /></el-icon>&nbsp;
+                {{ Number(detail.reviewStatus) === REVIEW.PASS || canEdit ? '在线预览' : '暂不可预览' }}
+              </el-button>
+              <el-button
                 type="primary"
                 size="large"
                 class="w-full mb-8"
@@ -200,10 +212,12 @@
 import { onMounted, computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { View } from '@element-plus/icons-vue'
 import StatusTag  from '@/components/common/StatusTag.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import {
-  resourceDetail, downloadResource, deleteResource
+  resourceDetail, downloadResource, deleteResource,
+  isPreviewSupported, buildPreviewUrl
 } from '@/api/resource'
 import { checkFavorite, addFavorite, removeFavorite } from '@/api/favorite'
 import { useUserStore } from '@/stores/userStore'
@@ -279,6 +293,19 @@ async function fetch() {
       favorited.value = !!(r && r.favorited)
     }
   } catch (_) {} finally { loading.value = false }
+}
+function doPreview() {
+  if (!detail.value.id) return
+  if (!user.isLoggedIn) {
+    ElMessage.warning('请先登录后预览')
+    router.replace({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  if (isPreviewSupported(detail.value)) {
+    window.open(buildPreviewUrl(detail.value.id), '_blank', 'noopener,noreferrer')
+  } else {
+    ElMessage.warning('该格式暂不支持在线预览，请下载查看')
+  }
 }
 async function doDownload() {
   if (!user.isLoggedIn) {

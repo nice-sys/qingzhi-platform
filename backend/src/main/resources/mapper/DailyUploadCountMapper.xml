@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.qingzhi.demo.mapper.DailyUploadCountMapper">
+
+    <resultMap id="BaseResultMap" type="com.qingzhi.demo.entity.DailyUploadCount">
+        <id     column="id"            property="id"/>
+        <result column="user_id"       property="userId"/>
+        <result column="upload_date"   property="uploadDate"/>
+        <result column="upload_count"  property="uploadCount"/>
+        <result column="create_time"   property="createTime"/>
+        <result column="update_time"   property="updateTime"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, user_id, upload_date, upload_count, create_time, update_time
+    </sql>
+
+    <!-- 按 (user_id, upload_date) 查询并加行级锁：避免并发 2 个请求同时 INSERT 造成穿数 -->
+    <select id="selectByUserAndDateForUpdate" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM daily_upload_count
+        WHERE user_id = #{userId}
+          AND upload_date = #{uploadDate}
+        FOR UPDATE
+    </select>
+
+    <!-- 首次初始化当天计数：upload_count = 1；UNIQUE 冲突会抛异常，Service 事务回滚并重查 -->
+    <insert id="insertInitial" parameterType="com.qingzhi.demo.entity.DailyUploadCount"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO daily_upload_count (user_id, upload_date, upload_count)
+        VALUES (#{userId}, #{uploadDate}, 1)
+    </insert>
+
+    <!-- 原子 +1：直接在 DB 端累加，避免 Java 端读-加-写 中间被其他事务抢占 -->
+    <update id="incrementCountById">
+        UPDATE daily_upload_count
+        SET upload_count = upload_count + 1
+        WHERE id = #{id}
+    </update>
+
+</mapper>

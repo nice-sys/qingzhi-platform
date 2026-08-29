@@ -44,7 +44,7 @@ import { formatFileSize } from '@/utils/format'
 
 const props = defineProps({
   limit:   { type: Number, default: 1 },
-  maxSize: { type: Number, default: 200 * 1024 * 1024 } // 默认200MB
+  maxSize: { type: Number, default: 100 * 1024 * 1024 } // 默认100MB（与后端 application.yml / 前端 constants MAX_UPLOAD_SIZE 对齐）
 })
 const emit = defineEmits(['success', 'remove'])
 const formatSize = formatFileSize

@@ -3,6 +3,7 @@ package com.qingzhi.demo.aspect;
 import com.qingzhi.demo.annotation.RateLimit;
 import com.qingzhi.demo.common.Constants;
 import com.qingzhi.demo.enums.ResponseCodeEnum;
+import com.qingzhi.demo.enums.RoleEnum;
 import com.qingzhi.demo.exception.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -16,10 +17,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
- * 限流切面（加分项：文件上传频率限制）
+ * 限流切面（加分项：文件上传频率限制 / 下载刷接口拦截）
  * <p>实现策略：滑动窗口计数 —— 每个限流 key 维护一个时间戳队列，
  * 每次请求前先清理窗口外的过期时间戳，剩余数量即窗口内已用次数，
- * 超过 maxRequests 则抛出 UPLOAD_RATE_LIMITED。
+ * 超过 maxRequests 则抛出 @RateLimit#errorCode 定义的错误码。
  */
 @Aspect
 @Component
@@ -39,9 +40,19 @@ public class RateLimitAspect {
 
     @Around("@annotation(rateLimit)")
     public Object around(ProceedingJoinPoint pjp, RateLimit rateLimit) throws Throwable {
+        // 1b. ✅ 管理员豁免：如果当前用户 role=ADMIN 且 @RateLimit(skipForAdmin=true)，直接放行，不计数
+        if (rateLimit.skipForAdmin()) {
+            HttpServletRequest req = getRequest();
+            Integer role = req == null ? null : (Integer) req.getAttribute(Constants.REQUEST_ATTR_CURRENT_USER_ROLE);
+            if (role != null && RoleEnum.ADMIN.getCode() == role) {
+                return pjp.proceed();
+            }
+        }
+
         String limitKey = buildLimitKey(rateLimit.dimension());
         int windowMs = rateLimit.windowSeconds() * 1000;
         int maxReq = rateLimit.maxRequests();
+        ResponseCodeEnum exceedCode = rateLimit.errorCode();
 
         ConcurrentLinkedDeque<Long> queue = windowMap.computeIfAbsent(limitKey,
                 k -> new ConcurrentLinkedDeque<>());
@@ -56,8 +67,8 @@ public class RateLimitAspect {
 
         // 3. 判断是否超限
         if (queue.size() >= maxReq) {
-            BusinessException.throwOf(ResponseCodeEnum.UPLOAD_RATE_LIMITED);
-            return null; // 不会执行到这里，throwIf 已抛异常
+            BusinessException.throwOf(exceedCode);
+            return null; // 不会执行到这里，throwOf 已抛异常
         }
 
         // 4. 通过限流，记录当前时间戳（队尾入队）

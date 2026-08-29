@@ -2,18 +2,21 @@ package com.qingzhi.demo.service.impl;
 
 import com.qingzhi.demo.common.Constants;
 import com.qingzhi.demo.common.PageResult;
+import com.qingzhi.demo.entity.DailyUploadCount;
 import com.qingzhi.demo.entity.FileStorage;
 import com.qingzhi.demo.entity.Resource;
 import com.qingzhi.demo.enums.ResponseCodeEnum;
 import com.qingzhi.demo.enums.ReviewStatusEnum;
 import com.qingzhi.demo.enums.RoleEnum;
 import com.qingzhi.demo.exception.BusinessException;
+import com.qingzhi.demo.mapper.DailyUploadCountMapper;
 import com.qingzhi.demo.mapper.ResourceMapper;
 import com.qingzhi.demo.mapper.UserMapper;
 import com.qingzhi.demo.service.FileService;
 import com.qingzhi.demo.service.ResourceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,12 +41,14 @@ public class ResourceServiceImpl implements ResourceService {
     private final ResourceMapper resourceMapper;
     private final FileService fileService;
     private final UserMapper userMapper;
+    private final DailyUploadCountMapper dailyUploadCountMapper;
 
     public ResourceServiceImpl(ResourceMapper resourceMapper, FileService fileService,
-                               UserMapper userMapper) {
+                               UserMapper userMapper, DailyUploadCountMapper dailyUploadCountMapper) {
         this.resourceMapper = resourceMapper;
         this.fileService = fileService;
         this.userMapper = userMapper;
+        this.dailyUploadCountMapper = dailyUploadCountMapper;
     }
 
     /* ====================================================================================
@@ -64,6 +69,67 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     /* ====================================================================================
+     * 每日上传配额扣减（核心限流）
+     * - 单用户每天最多 DAILY_UPLOAD_MAX_COUNT（100）条 resource 行（正式+草稿合并计数）
+     * - 用 UNIQUE(user_id, upload_date) + SELECT ... FOR UPDATE 行锁保证并发严格串行化，
+     *   杜绝并发 2 请求都读到 count=99 然后同时 +1 穿数到 101 的问题
+     * - 管理员暂不豁免（需求未指定）；如需豁免后续只要在此方法开头判断 role 即可
+     * ==================================================================================== */
+    private void consumeDailyUploadQuota(Long userId) {
+        if (userId == null) return;
+        final LocalDate today = LocalDate.now();
+
+        // 1. 先加行级锁查询当天计数（若记录已存在）
+        DailyUploadCount row = dailyUploadCountMapper.selectByUserAndDateForUpdate(userId, today);
+        if (row != null) {
+            // 已存在：先判断当前计数是否已达上限；是则直接拒绝，否则原子 +1
+            int cur = row.getUploadCount() == null ? 0 : row.getUploadCount();
+            if (cur >= Constants.DAILY_UPLOAD_MAX_COUNT) {
+                log.warn("[每日上传超限] userId={} date={} cur={} limit={}",
+                        userId, today, cur, Constants.DAILY_UPLOAD_MAX_COUNT);
+                throw new BusinessException(ResponseCodeEnum.DAILY_UPLOAD_LIMIT_EXCEEDED);
+            }
+            int rows = dailyUploadCountMapper.incrementCountById(row.getId());
+            if (rows <= 0) {
+                throw new BusinessException(ResponseCodeEnum.FAILURE, "每日计数更新失败，请重试");
+            }
+            log.debug("[每日上传扣减] userId={} date={} after={}", userId, today, cur + 1);
+            return;
+        }
+
+        // 2. 当天无记录：新建一条 upload_count = 1（首条配额）
+        //    并发场景下若两个事务同时走到这里插入，UNIQUE 索引会让后提交者抛 DuplicateKeyException；
+        //    捕获后重试一次：重新 SELECT FOR UPDATE 拿到对端插入的行，按 "已存在" 分支再判断
+        DailyUploadCount insert = new DailyUploadCount();
+        insert.setUserId(userId);
+        insert.setUploadDate(today);
+        try {
+            int rows = dailyUploadCountMapper.insertInitial(insert);
+            if (rows > 0 && insert.getId() != null) {
+                log.debug("[每日上传扣减] 新建记录 userId={} date={} count=1", userId, today);
+                return;
+            }
+            throw new BusinessException(ResponseCodeEnum.FAILURE, "每日计数初始化失败，请重试");
+        } catch (DuplicateKeyException dup) {
+            // 并发冲突：另一个事务先插入成功 → 重查一次 + 正常扣减
+            DailyUploadCount retry = dailyUploadCountMapper.selectByUserAndDateForUpdate(userId, today);
+            if (retry == null) {
+                throw new BusinessException(ResponseCodeEnum.FAILURE, "每日计数冲突重试失败，请重试");
+            }
+            int cur = retry.getUploadCount() == null ? 0 : retry.getUploadCount();
+            if (cur >= Constants.DAILY_UPLOAD_MAX_COUNT) {
+                log.warn("[每日上传超限-冲突重试] userId={} date={} cur={}", userId, today, cur);
+                throw new BusinessException(ResponseCodeEnum.DAILY_UPLOAD_LIMIT_EXCEEDED);
+            }
+            int rows = dailyUploadCountMapper.incrementCountById(retry.getId());
+            if (rows <= 0) {
+                throw new BusinessException(ResponseCodeEnum.FAILURE, "每日计数重试更新失败，请重试");
+            }
+            log.debug("[每日上传扣减-冲突重试] userId={} date={} after={}", userId, today, cur + 1);
+        }
+    }
+
+    /* ====================================================================================
      * 一、发布资源
      * ==================================================================================== */
 
@@ -72,6 +138,9 @@ public class ResourceServiceImpl implements ResourceService {
     public Long publishResource(Resource resourceDto, Long uploaderId) {
         // 1. 基础校验：当前用户、必填字段
         BusinessException.throwIfNull(uploaderId, ResponseCodeEnum.UNAUTHORIZED);
+        // 2. ✅ 每日上传限流（草稿+正式统一计数）：在事务最开头扣配额，防止后续文件引用已 +1 后才发现超限浪费引用
+        consumeDailyUploadQuota(uploaderId);
+
         BusinessException.throwIfBlank(resourceDto.getTitle(),
                 ResponseCodeEnum.PARAM_ERROR, "资源标题不能为空");
         BusinessException.throwIf(resourceDto.getTitle().length() > Constants.RESOURCE_TITLE_MAX_LENGTH,
@@ -549,6 +618,9 @@ public class ResourceServiceImpl implements ResourceService {
             return draftId;
         } else {
             // 4. 新建草稿：insert 新记录，reviewStatus=DRAFT
+            // 4b. ✅ 每日上传配额扣减（更新旧草稿不扣，新建扣 1）
+            consumeDailyUploadQuota(operatorId);
+
             Resource insert = new Resource();
             if (body != null) {
                 insert.setTitle(body.getTitle());

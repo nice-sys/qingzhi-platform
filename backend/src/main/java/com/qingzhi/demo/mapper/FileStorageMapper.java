@@ -55,4 +55,18 @@ public interface FileStorageMapper {
      * @return 影响行数
      */
     int deleteById(@Param("id") Long id);
+
+    /**
+     * 根据主键更新文件路径 / 大小 / 引用计数（用于校正「DB 哈希命中但磁盘文件已丢失」的脏记录）
+     *
+     * @param id             主键
+     * @param newFilePath    新的相对路径
+     * @param newFileSize    新的文件字节大小
+     * @param resetReference 重置后的引用计数（建议 1）
+     * @return 影响行数（应返回 1）
+     */
+    int updatePathAndSize(@Param("id") Long id,
+                          @Param("newFilePath") String newFilePath,
+                          @Param("newFileSize") Long newFileSize,
+                          @Param("resetReference") Integer resetReference);
 }

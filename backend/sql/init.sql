@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- 青知共享平台 - 数据库初始化脚本
 -- 数据库：qingzhi_platform
 -- 字符集：utf8mb4  排序规则：utf8mb4_0900_ai_ci
@@ -156,5 +156,21 @@ INSERT INTO `user` (
 
 -- 自增值从 10000 开始，学号/工号业务从 10001 起
 ALTER TABLE `user` AUTO_INCREMENT = 10001;
+
+-- --------------------------------------------------------
+-- 6. 每日上传计数表（daily_upload_count）  上传限流功能
+-- --------------------------------------------------------
+DROP TABLE IF EXISTS `daily_upload_count`;
+CREATE TABLE `daily_upload_count` (
+    `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id`       BIGINT UNSIGNED NOT NULL COMMENT '用户ID（FK -> user.id）',
+    `upload_date`   DATE            NOT NULL COMMENT '上传日期（yyyy-MM-dd，按自然日归档）',
+    `upload_count`  INT UNSIGNED    NOT NULL DEFAULT 0 COMMENT '当日已上传的资源/草稿数量（每条 resource 行计 1）',
+    `create_time`   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_date` (`user_id`, `upload_date`),
+    KEY `idx_upload_date` (`upload_date`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户每日上传计数表（草稿+正式资源合并计数，每日 100 上限）';
 
 SET FOREIGN_KEY_CHECKS = 1;

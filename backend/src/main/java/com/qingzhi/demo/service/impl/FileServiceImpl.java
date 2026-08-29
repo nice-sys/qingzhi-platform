@@ -120,23 +120,63 @@ public class FileServiceImpl implements FileService {
         BusinessException.throwIf(fileHash == null || fileHash.isEmpty(),
                 ResponseCodeEnum.FILE_UPLOAD_FAILED, "文件哈希计算失败");
 
-        // 4. 秒传命中判断
+        // 4. 秒传命中判断：必须满足「DB 有相同哈希 + 对应磁盘文件真实存在 + 磁盘大小与 DB 记录一致」三重校验
+        //    防止用户手动清空 uploads 目录后，仅命中 DB hash 就「秒传成功，实际无文件可下载」的脏问题
         FileStorage existing = fileStorageMapper.selectByFileHash(fileHash);
-        if (existing != null) {
-            // 4a. 秒传命中：引用计数 +1，不写磁盘，直接返回
-            fileStorageMapper.incrementReferenceCount(existing.getId());
-            // 无论 DB 是否有这两列，都写实体引用计数用不到；但 fromEntity/回填逻辑需要（未来加列自动生效）
-            existing.setOriginalFileName(originalName);
-            String ext = FileUtil.getExtension(originalName);
-            if (ext != null && !ext.isEmpty()) existing.setFileExt(ext);
-            log.info("秒传命中：哈希 {} 已存在，引用计数已 +1（当前引用数={})",
-                    fileHash, existing.getReferenceCount() + 1);
-            return buildResult(existing, originalName, true);
+        boolean reallyHitQuickUpload = false;
+        if (existing != null && existing.getId() != null) {
+            final String realBaseDir = getResolvedUploadBaseDir();
+            boolean diskOk = false;
+            Path existAbs = null;
+            String whyDiskBad = null;
+            try {
+                String relPath = (existing.getFilePath() == null) ? "" : existing.getFilePath().replace('\\', '/');
+                if (!relPath.isEmpty()) {
+                    existAbs = FileUtil.resolveAbsolutePath(realBaseDir, relPath);
+                    if (!Files.exists(existAbs) || !Files.isRegularFile(existAbs)) {
+                        whyDiskBad = "磁盘文件不存在（DB.filePath=" + relPath + " -> abs=" + existAbs + "）";
+                    } else {
+                        long diskSize = Files.size(existAbs);
+                        Long dbSize = existing.getFileSize();
+                        if (dbSize == null || diskSize != dbSize.longValue()) {
+                            whyDiskBad = "磁盘大小与 DB 记录不一致（DB.fileSize=" + dbSize + " vs disk=" + diskSize + "，abs=" + existAbs + "）";
+                        } else {
+                            diskOk = true;
+                        }
+                    }
+                } else {
+                    whyDiskBad = "DB.filePath 为空（脏数据）";
+                }
+            } catch (Exception e) {
+                whyDiskBad = "磁盘校验异常：" + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                log.warn("[秒传-磁盘校验异常] fileHash={}, fileStorageId={}", fileHash, existing.getId(), e);
+            }
+
+            if (diskOk) {
+                // 4a. 真秒传命中：引用计数 +1，不写磁盘，直接返回
+                fileStorageMapper.incrementReferenceCount(existing.getId());
+                existing.setOriginalFileName(originalName);
+                String ext = FileUtil.getExtension(originalName);
+                if (ext != null && !ext.isEmpty()) existing.setFileExt(ext);
+                FileStorage updated = fileStorageMapper.selectById(existing.getId());
+                log.info("[秒传命中-OK] hash={}, fileStorageId={}, absPath={}, 原引用={}, 新引用={}",
+                        fileHash, existing.getId(), existAbs,
+                        existing.getReferenceCount(), (updated == null ? null : updated.getReferenceCount()));
+                reallyHitQuickUpload = true;
+                return buildResult(existing, originalName, true);
+            } else {
+                // 4b. DB 命中哈希但磁盘丢失/损坏：打印 WARN 降级为「正常上传 + 把死 DB 记录校正为新的路径/大小/ref=1」
+                //    否则下次再上传同一哈希还会命中这条死记录
+                log.warn("[秒传命中但磁盘丢失/损坏，降级为正常上传+校正脏DB] hash={}, fileStorageId={}, why={}",
+                        fileHash, existing.getId(), whyDiskBad);
+                // 继续走下面真实写盘流程；写盘成功后用 updatePathAndSize 把 existing.id 这条死记录覆盖回来，
+                // 避免新 insert 时因为 file_hash UNIQUE 约束报 Duplicate key
+            }
         }
 
-        // 4b. 未命中：真实写盘 + 新增 file_storage 记录
+        // 5. 真实写盘（未命中哈希 或 哈希命中但磁盘已损坏/丢失 都走到这里）
         String relativePath = FileUtil.generateRelativePath(originalName);
-        final String realBaseDir = getResolvedUploadBaseDir();   // 保证非空，getter 内部 fallback 初始化
+        final String realBaseDir = getResolvedUploadBaseDir();
         Path absPath = null;
         try {
             absPath = FileUtil.resolveAbsolutePath(realBaseDir, relativePath);
@@ -190,7 +230,7 @@ public class FileServiceImpl implements FileService {
                     log.warn("[上传-2秒后存活检查异常] absPath={}", checkPath, e);
                 }
             }, "UploadFileChecker-" + (checkPath.getFileName() == null ? "" : checkPath.getFileName()));
-            checker.setDaemon(true);  // JVM 退出时自动销毁，不会卡住 SpringBoot shutdown
+            checker.setDaemon(true);
             checker.start();
         } catch (IOException e) {
             log.error("保存上传文件到磁盘失败 [uploaderId={}, fileName={}, path={}, absPath={}]",
@@ -199,17 +239,44 @@ public class FileServiceImpl implements FileService {
                     "保存上传文件失败（" + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()) + "）");
         }
 
-        FileStorage storage = new FileStorage();
-        storage.setFileHash(fileHash);
-        storage.setFilePath(relativePath);
-        storage.setFileSize(fileSize);
-        storage.setReferenceCount(1);
-        storage.setOriginalFileName(originalName);
-        String ext = FileUtil.getExtension(originalName);
-        if (ext != null && !ext.isEmpty()) storage.setFileExt(ext);
-        fileStorageMapper.insert(storage);
+        FileStorage storage;
+        if (existing != null && existing.getId() != null && !reallyHitQuickUpload) {
+            // 走到这里 = 之前 DB 有相同 hash 但磁盘已丢/损坏 → 用 updatePathAndSize 校正回这条原记录，
+            // 避免 INSERT 时撞 file_hash UNIQUE 约束
+            int rows = fileStorageMapper.updatePathAndSize(existing.getId(), relativePath, fileSize, 1);
+            log.info("[上传-脏DB校正] fileHash={}, fileStorageId={}, newPath={}, newSize={}, rows={}",
+                    fileHash, existing.getId(), relativePath, fileSize, rows);
+            storage = fileStorageMapper.selectById(existing.getId());
+            if (storage != null) {
+                storage.setOriginalFileName(originalName);
+                String ext = FileUtil.getExtension(originalName);
+                if (ext != null && !ext.isEmpty()) storage.setFileExt(ext);
+            } else {
+                storage = new FileStorage();
+                storage.setId(existing.getId());
+                storage.setFileHash(fileHash);
+                storage.setFilePath(relativePath);
+                storage.setFileSize(fileSize);
+                storage.setReferenceCount(1);
+                storage.setOriginalFileName(originalName);
+                String ext = FileUtil.getExtension(originalName);
+                if (ext != null && !ext.isEmpty()) storage.setFileExt(ext);
+            }
+        } else {
+            // 正常首次上传新文件
+            storage = new FileStorage();
+            storage.setFileHash(fileHash);
+            storage.setFilePath(relativePath);
+            storage.setFileSize(fileSize);
+            storage.setReferenceCount(1);
+            storage.setOriginalFileName(originalName);
+            String ext = FileUtil.getExtension(originalName);
+            if (ext != null && !ext.isEmpty()) storage.setFileExt(ext);
+            fileStorageMapper.insert(storage);
+        }
 
-        log.info("文件上传完成（新文件）：fileStorageId={}, hash={}, path={}, size={}",
+        log.info("文件上传完成（{}）：fileStorageId={}, hash={}, path={}, size={}",
+                (reallyHitQuickUpload ? "真正秒传" : (existing == null ? "新文件上传" : "DB脏记录校正后写入")),
                 storage.getId(), fileHash, relativePath, fileSize);
 
         return buildResult(storage, originalName, false);

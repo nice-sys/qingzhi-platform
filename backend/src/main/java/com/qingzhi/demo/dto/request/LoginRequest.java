@@ -26,12 +26,29 @@ public class LoginRequest implements Serializable {
     @NotBlank(message = "密码不能为空")
     private String password;
 
+    /**
+     * 是否勾选「记住我」
+     * <ul>
+     *   <li>true  → Token 有效期 7 天，并允许下次在登录页自动回填用户名</li>
+     *   <li>false → Token 有效期 2 小时，下次打开不回填用户名</li>
+     * </ul>
+     * <p>可空：默认 false</p>
+     */
+    private Boolean rememberMe;
+
     public LoginRequest() {
     }
 
     public LoginRequest(String username, String password) {
         this.username = username;
         this.password = password;
+        this.rememberMe = false;
+    }
+
+    public LoginRequest(String username, String password, Boolean rememberMe) {
+        this.username = username;
+        this.password = password;
+        this.rememberMe = rememberMe;
     }
 
     public String getUsername() {
@@ -48,5 +65,23 @@ public class LoginRequest implements Serializable {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    /**
+     * 取 rememberMe 值（null 视为 false，避免 NPE）
+     */
+    public Boolean getRememberMe() {
+        return Boolean.TRUE.equals(rememberMe);
+    }
+
+    /**
+     * 同上：用于 Spring MVC / MyBatis 属性访问时 isXxx 命名
+     */
+    public boolean isRememberMe() {
+        return Boolean.TRUE.equals(rememberMe);
+    }
+
+    public void setRememberMe(Boolean rememberMe) {
+        this.rememberMe = rememberMe;
     }
 }

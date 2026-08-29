@@ -39,6 +39,11 @@
             />
           </el-form-item>
 
+          <!-- 记住我复选框：默认不勾选 -->
+          <div class="remember-row mb-16 flex-between">
+            <el-checkbox v-model="form.rememberMe" label="记住我（7 天免登录，仅自动填充用户名）" />
+          </div>
+
           <div class="card-tips mb-16 text-muted text-sm">
             💡 管理员初始账号：<code>{{ DEFAULT_ADMIN.username }} / {{ DEFAULT_ADMIN.password }}</code>
           </div>
@@ -62,7 +67,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { login } from '@/api/auth'
@@ -78,8 +83,9 @@ const formRef = ref(null)
 const loading = ref(false)
 
 const form = reactive({
-  username: DEFAULT_ADMIN.username,
-  password: DEFAULT_ADMIN.password
+  username: '',
+  password: '',
+  rememberMe: false
 })
 
 const rules = {
@@ -87,16 +93,43 @@ const rules = {
   password: [{ validator: buildPasswordValidator(), trigger: 'blur' }]
 }
 
+/**
+ * 登录页初始化：
+ * 【约束 1 严格遵守】：若 localStorage 里有记住的用户名，仅回填用户名 + 勾选 rememberMe，
+ *   - 密码保持为空
+ *   - 绝不自动点击登录按钮
+ *   - 若没有记住的用户名，则默认填入 DEFAULT_ADMIN.username（方便测试管理员账号）
+ */
+onMounted(() => {
+  const uname = user.getRememberedUsername()
+  if (uname && String(uname).trim().length > 0) {
+    form.username = String(uname).trim()
+    form.password = ''
+    form.rememberMe = true
+  } else {
+    form.username = DEFAULT_ADMIN.username
+    form.password = ''
+    form.rememberMe = false
+  }
+  // ❗ 再次强调：绝不在这里调用 doLogin()，也不会自动触发 validate / 点击登录
+  //   满足用户「测试时需要随时切换超管/教师/学生」的账号切换需求
+})
+
 async function doLogin() {
   try {
     await formRef.value.validate()
   } catch (_) { return }
   loading.value = true
   try {
-    const data = await login({ username: form.username.trim(), password: form.password })
+    const remember = !!form.rememberMe
+    const data = await login({
+      username: form.username.trim(),
+      password: form.password,
+      rememberMe: remember
+    })
     // 后端 LoginResponse: { token: String, userInfo: UserInfoResponse }
-    user.setLoginData(data && data.token, data && data.userInfo)
-    ElMessage.success('登录成功')
+    user.setLoginData(data && data.token, data && data.userInfo, remember)
+    ElMessage.success(remember ? '登录成功（记住我：7 天内再次访问仅回填用户名）' : '登录成功')
     const redirect = (route.query && route.query.redirect) || '/dashboard'
     router.replace(redirect)
   } catch (_e) {
@@ -149,10 +182,14 @@ async function doLogin() {
   font-weight: 700;
   color: var(--qz-text-primary);
 }
+.remember-row {
+  user-select: none;
+}
 .text-muted { color: var(--qz-text-secondary); }
 .text-sm { font-size: 13px; }
 .text-right { text-align: right; }
 .text-primary { color: var(--qz-primary); }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
 .mb-8  { margin-bottom: 8px; }
 .mb-16 { margin-bottom: 16px; }
 .mb-24 { margin-bottom: 24px; }

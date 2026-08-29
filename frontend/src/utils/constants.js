@@ -169,7 +169,7 @@ export const MAX_TAGS = 5
  * ============================================================ */
 export const DEFAULT_ADMIN = Object.freeze({ username: 'Admin', password: 'Admin2026' })
 export const RESET_DEFAULT_PASSWORD = 'Qz123456'
-export const MAX_UPLOAD_SIZE = 200 * 1024 * 1024 // 200MB
+export const MAX_UPLOAD_SIZE = 100 * 1024 * 1024 // 100MB（与后端 application.yml / Constants.MAX_FILE_SIZE_BYTES 对齐）
 export const EXCEL_IMPORT_MAX = 10 * 1024 * 1024  // 10MB
 
 /* ============================================================

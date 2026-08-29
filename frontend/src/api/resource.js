@@ -1,4 +1,5 @@
 import request, { triggerDownload } from './request'
+import { useUserStore } from '@/stores/userStore'
 
 /**
  * 资源模块（普通用户侧）
@@ -81,6 +82,61 @@ export function downloadResource(id, filenameHint) {
     url: `/resource/${id}/download`,
     filenameHint
   })
+}
+
+/**
+ * 拼接在线预览 URL（用于 window.open，因为 window.open 无法带自定义 header）
+ * GET /api/resource/{id}/preview?token=<JWT>
+ * 返回完整 URL 字符串（包含 baseURL 和查询 token 参数），直接 window.open 即可。
+ */
+export function buildPreviewUrl(id) {
+  const base = (import.meta.env && import.meta.env.VITE_API_BASE_URL) || '/api'
+  let token = ''
+  try {
+    const u = useUserStore()
+    token = (u && u.token) ? String(u.token) : ''
+  } catch (_) { token = '' }
+  let url = `${String(base).replace(/\/+$/, '')}/resource/${encodeURIComponent(id)}/preview`
+  if (token) url += (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token)
+  return url
+}
+
+/**
+ * 判断扩展名是否支持浏览器在线预览
+ * 支持：PDF / 图片 / 常见文本/结构化文本
+ */
+export const PREVIEW_EXTS = Object.freeze(
+  new Set(['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg',
+           'txt', 'log', 'md', 'json', 'csv', 'xml', 'yaml', 'yml'])
+)
+
+/**
+ * 从任意输入（扩展名字符串 / Resource 对象 / 文件名）提取扩展名并返回是否支持预览
+ */
+export function isPreviewSupported(input) {
+  let ext = ''
+  if (!input) return false
+  if (typeof input === 'string') {
+    const s = input.trim().toLowerCase()
+    if (!s) return false
+    if (!s.includes('.')) ext = s
+    else ext = (s.split('.').pop() || '').toLowerCase()
+  } else if (typeof input === 'object') {
+    // Resource/ResourceInfoResponse DTO 形态：优先用 fileExt，其次用 fileName/type/type(扩展名)
+    ext = String(input.fileExt || input.file_ext || input.type || input.ext || '').toLowerCase()
+    if (!ext && input.fileName) {
+      const n = String(input.fileName)
+      const i = n.lastIndexOf('.')
+      if (i >= 0) ext = n.substring(i + 1).toLowerCase()
+    }
+    if (!ext && input.originalName) {
+      const n = String(input.originalName)
+      const i = n.lastIndexOf('.')
+      if (i >= 0) ext = n.substring(i + 1).toLowerCase()
+    }
+  }
+  if (!ext) return false
+  return PREVIEW_EXTS.has(ext)
 }
 
 /**

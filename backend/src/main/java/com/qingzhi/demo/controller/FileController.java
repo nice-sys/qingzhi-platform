@@ -75,6 +75,11 @@ public class FileController {
      * ==================================================================================== */
 
     @GetMapping("/download/{resourceId}")
+    @RateLimit(dimension = RateLimit.LimitDimension.USER,
+            windowSeconds = 60,
+            maxRequests = 5,
+            skipForAdmin = true,
+            errorCode = ResponseCodeEnum.OPERATION_TOO_FREQUENT)
     public ResponseEntity<org.springframework.core.io.Resource> download(@PathVariable("resourceId") Long resourceId,
                                              HttpServletRequest request) {
         // 1. 登录态校验（JwtInterceptor 已注入当前用户，但这里兜底校验，防止匿名访问下载接口）

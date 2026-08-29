@@ -19,9 +19,21 @@ public class JwtConfig {
 
     /**
      * Token 过期时间（单位：秒）
-     * <p>默认 24 小时 = 86400 秒</p>
+     * <p>默认 24 小时 = 86400 秒（注册后自动登录等非 rememberMe 场景使用）</p>
      */
     private long expireSeconds = 86400L;
+
+    /**
+     * 「记住我」Token 过期时间（单位：秒）
+     * <p>默认 7 天 = 604800 秒；勾选记住我时使用</p>
+     */
+    private long rememberExpireSeconds = 604800L;
+
+    /**
+     * 「普通登录不勾选记住我」Token 过期时间（单位：秒）
+     * <p>默认 2 小时 = 7200 秒；符合用户测试约束</p>
+     */
+    private long normalExpireSeconds = 7200L;
 
     /**
      * Token 在请求 Header 中的字段名
@@ -66,6 +78,22 @@ public class JwtConfig {
 
     public void setExpireSeconds(long expireSeconds) {
         this.expireSeconds = expireSeconds;
+    }
+
+    public long getRememberExpireSeconds() {
+        return rememberExpireSeconds;
+    }
+
+    public void setRememberExpireSeconds(long rememberExpireSeconds) {
+        this.rememberExpireSeconds = rememberExpireSeconds;
+    }
+
+    public long getNormalExpireSeconds() {
+        return normalExpireSeconds;
+    }
+
+    public void setNormalExpireSeconds(long normalExpireSeconds) {
+        this.normalExpireSeconds = normalExpireSeconds;
     }
 
     public String getHeaderName() {

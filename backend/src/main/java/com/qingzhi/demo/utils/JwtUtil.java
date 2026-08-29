@@ -36,6 +36,7 @@ public class JwtUtil {
     /**
      * 生成 JWT Token
      * <p>Payload 中包含：用户ID、角色、用户名</p>
+     * <p>过期时间：使用配置中默认 expireSeconds（24h），用于注册后自动登录等场景</p>
      *
      * @param userId   用户ID
      * @param role     角色编码（0管理员/1教师/2学生）
@@ -43,18 +44,28 @@ public class JwtUtil {
      * @return 完整 Token 字符串（不含前缀，前端拼接 Bearer 即可）
      */
     public String generateToken(Long userId, Integer role, String username) {
-        Date now = new Date();
-        Date expireAt = new Date(now.getTime() + jwtConfig.getExpireSeconds() * 1000);
+        return buildToken(userId, role, username, jwtConfig.getExpireSeconds() * 1000L);
+    }
 
-        return Jwts.builder()
-                .subject(String.valueOf(userId))
-                .claim(jwtConfig.getClaimUserId(), userId)
-                .claim(jwtConfig.getClaimRole(), role)
-                .claim(jwtConfig.getClaimUsername(), username)
-                .issuedAt(now)
-                .expiration(expireAt)
-                .signWith(getSecretKey(), SignatureAlgorithm.HS256)
-                .compact();
+    /**
+     * 生成 JWT Token（支持「记住我」策略）
+     * <p>Payload 中包含：用户ID、角色、用户名</p>
+     * <ul>
+     *   <li>rememberMe = true  → 使用 {@link JwtConfig#getRememberExpireSeconds()}（默认 7 天）</li>
+     *   <li>rememberMe = false → 使用 {@link JwtConfig#getNormalExpireSeconds()}（默认 2 小时）</li>
+     * </ul>
+     *
+     * @param userId     用户ID
+     * @param role       角色编码（0管理员/1教师/2学生）
+     * @param username   账号
+     * @param rememberMe 是否勾选「记住我」
+     * @return 完整 Token 字符串（不含前缀，前端拼接 Bearer 即可）
+     */
+    public String generateToken(Long userId, Integer role, String username, boolean rememberMe) {
+        long expireSeconds = rememberMe
+                ? jwtConfig.getRememberExpireSeconds()
+                : jwtConfig.getNormalExpireSeconds();
+        return buildToken(userId, role, username, expireSeconds * 1000L);
     }
 
     /* ====================================================================================
@@ -144,6 +155,23 @@ public class JwtUtil {
     /* ====================================================================================
      * 私有辅助方法
      * ==================================================================================== */
+
+    /**
+     * 按传入的 expireMillis（毫秒）构造 JWT Token
+     */
+    private String buildToken(Long userId, Integer role, String username, long expireMillis) {
+        Date now = new Date();
+        Date expireAt = new Date(now.getTime() + expireMillis);
+        return Jwts.builder()
+                .subject(String.valueOf(userId))
+                .claim(jwtConfig.getClaimUserId(), userId)
+                .claim(jwtConfig.getClaimRole(), role)
+                .claim(jwtConfig.getClaimUsername(), username)
+                .issuedAt(now)
+                .expiration(expireAt)
+                .signWith(getSecretKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
 
     /**
      * 根据配置的 secret 字符串生成 HMAC-SHA 密钥

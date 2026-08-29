@@ -34,12 +34,17 @@ public final class Constants {
      * ==================================================================================== */
 
     /**
-     * 文件上传最大大小（字节）：50MB
+     * 文件上传最大大小（字节）：100MB（与 application.yml spring.servlet.multipart.max-file-size 对齐）
      */
-    public static final long MAX_FILE_SIZE_BYTES = 50L * 1024 * 1024;
+    public static final long MAX_FILE_SIZE_BYTES = 100L * 1024 * 1024;
 
     /**
-     * 文件上传频率限制：同一用户每分钟最多上传的文件数（对应 PRD 加分项）
+     * 单个用户每日最多上传的资源数（草稿 + 正式资源 合并计数，每条 resource 行占 1 个配额）
+     */
+    public static final int DAILY_UPLOAD_MAX_COUNT = 100;
+
+    /**
+     * 文件上传频率限制：同一用户每分钟最多上传的文件数（对应 PRD 加分项：物理上传频率拦截）
      */
     public static final int FILE_UPLOAD_RATE_LIMIT = 5;
 

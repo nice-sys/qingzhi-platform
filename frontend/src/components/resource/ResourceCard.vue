@@ -47,6 +47,15 @@
         <el-button
           link
           type="primary"
+          @click.stop="$emit('preview', data)"
+          :disabled="Number(data.reviewStatus) !== 1"
+          :title="Number(data.reviewStatus) !== 1 ? '审核通过后可预览' : '在线预览'"
+        >
+          <el-icon><View /></el-icon>
+        </el-button>
+        <el-button
+          link
+          type="primary"
           @click.stop="$emit('quickDownload', data)"
           :disabled="Number(data.reviewStatus) !== 1"
           :title="Number(data.reviewStatus) !== 1 ? '审核通过后可下载' : '立即下载'"
@@ -76,13 +85,14 @@ import StatusTag from '@/components/common/StatusTag.vue'
 import { formatDateTime, formatDownloadCount } from '@/utils/format'
 import { TYPE_TAG_TYPE } from '@/utils/constants'
 import { ROLE_NAME } from '@/utils/permission'
+import { View, Download, Star, User } from '@element-plus/icons-vue'
 
 const props = defineProps({
   data:          { type: Object, default: () => ({}) },
   favorited:     { type: Boolean, default: false },
   showFavorite:  { type: Boolean, default: true }
 })
-defineEmits(['click', 'toggleFavorite', 'quickDownload'])
+defineEmits(['click', 'toggleFavorite', 'quickDownload', 'preview'])
 
 const formatDate = formatDateTime
 const formatCount = formatDownloadCount
